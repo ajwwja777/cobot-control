@@ -8,8 +8,8 @@
 - A6000 主工作区：`/data/LFT-W02_data/jiaan/jiaan/projects/cobot-control`。
 - 笔记本对话入口：`D:\Code\jiaan_workspace\cobot-control`。
 - 自有独立仓库：`https://github.com/ajwwja777/cobot-control`（目标分支 `main`）。
-- Cobot 目标部署位置：`/home/agilex/jiaan/project/cobot-control`，本轮尚未部署。
-- 当前阶段：入口与仓库初始化；旧业务代码、环境、模型和数据尚未迁移，现有服务入口未切换。
+- Cobot 目标部署位置：`/home/agilex/jiaan/project/cobot-control`，按迁移记录分批部署。
+- 当前阶段：硬件源码与脚本迁入，现场切换结果见 docs/MIGRATION.md。
 
 ## 负责什么
 
@@ -38,3 +38,11 @@ CAN、反馈、相机和归位问题由本项目负责；网页任务／PID 问�
 来源：2026-09-27 用户确认的项目划分、机器职责与逐批迁移方案；本轮范围仅初始化。
 
 2026-09-27 归属更新：独立 ops 项目已取消；本次仅修正协作与 runtime 归属，不代表本项目旧业务资产已迁移。
+
+## 硬件入口
+
+scripts/ 下包含 can_up.sh、roscore_up.sh、arms_up.sh、cameras_up.sh、home.sh、recover.sh、front_mode.sh、front_reset.sh 和 teleop.sh。robot/ 是硬件实现，configs/home_poses.yaml 是位姿唯一来源，runtime/ 保存 ROS/相机/机械臂日志。网页保留同名轻量转发脚本。
+
+前臂、中臂、后臂和示教交接节点均纳入 robot/arms。ROS 消息／Astra 驱动和 Piper SDK 是现场安装依赖，不属于旧 cobot-platform 业务目录。源码来源见 [HARDWARE_SOURCE](docs/HARDWARE_SOURCE.md)。
+
+完整命令与故障恢复见同级 cobot-web/docs/COMMAND_LINE.md；RLT 操作见同级 rl-platform/docs/RUNBOOK.md。归位参数与此前一致，例如 scripts/home.sh selected --targets mid,front-right --pose plug2；执行前核对选中的机械臂和位姿。

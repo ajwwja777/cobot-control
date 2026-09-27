@@ -34,3 +34,7 @@
 - 首次发布提交：`ff565f2abe977473c7e2f087cfa48b13d4a841bd`。
 - 本记录在首次发布验证后追加并单独提交；最新版本以 main 为准。
 - 运行状态：源码／文档基础已发布，业务迁移、环境安装及新位置运行验收尚未开展。
+
+## 2026-09-27 硬件提取（进行中）
+
+从 cobot-web d5fe477 提取 robot、integrations/legacy_control、硬件 scripts 和位姿配置，保留运动／示教语义。前臂及中臂实际节点从 Piper workspace 复制，SHA 见 HARDWARE_SOURCE.md。A6000 为主代码和 Git；Cobot 目标为 /home/agilex/jiaan/project/cobot-control。旧 launch 进程退出、新位置静态及状态检查通过前不删除旧项目。当前切换尚待验证，未进行真机动作测试。
