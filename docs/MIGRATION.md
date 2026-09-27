@@ -1,6 +1,6 @@
 # Cobot 硬件与独立前后双臂控制：迁移记录
 
-日期：2026-09-27。当前批次：**入口初始化**，尚未开始业务迁移。
+日期：2026-09-27。当前业务迁移进度见文末；以下初始化内容保留为历史记录。
 
 ## 已有位置与成果
 
@@ -38,3 +38,11 @@
 ## 2026-09-27 硬件提取（进行中）
 
 从 cobot-web d5fe477 提取 robot、integrations/legacy_control、硬件 scripts 和位姿配置，保留运动／示教语义。前臂及中臂实际节点从 Piper workspace 复制，SHA 见 HARDWARE_SOURCE.md。A6000 为主代码和 Git；Cobot 目标为 /home/agilex/jiaan/project/cobot-control。旧 launch 进程退出、新位置静态及状态检查通过前不删除旧项目。当前切换尚待验证，未进行真机动作测试。
+
+## 2026-09-27 23:55：源码发布与节点切换前状态
+
+源码 942d459a5d6c45a54a49ff86cedf46f6a3e4c6e6 已 push；Cobot /home/agilex/jiaan/project/cobot-control 同步 111 文件并 SHA-256 核验。硬件测试 342 passed；ROS stub 在未替换调用时明确报错，不会接通真实硬件。新增 CAN recovery 转发仍待下一次同步。位姿来自现场，控制语义未调整。
+
+用户确认机械臂安全断电，可重启节点；本轮仍未执行节点重启或归位。RLT 模型验证期间 Cobot 网络连接中断，需恢复连接后重查进程，再停止旧 launch、从新路径启动和核验。旧项目和网页内硬件兼容副本均未删除。Piper/ROS/Astra 已安装工作区与 aloha SDK 是共享依赖，不属于可整棵删除的旧 cobot-platform。
+
+联动细节与证据：同级 rl-platform/docs/MIGRATION.md 及 outputs/migrations/20260927-rlt/。
