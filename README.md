@@ -15,19 +15,19 @@
 
 设备发现与状态、硬件启动停止、控制权与示教状态、选择臂和位姿的归位／恢复、底层相机接口。
 
-向采集、VLA、RL 和网页提供设备接口；数据标签与训练 mask 交给 cobot-dagger，模型动作语义交给 vla-platform，运行编排与日志交给 cobot-ops。物理设备控制权必须统一，调用方不得另起绕过仲裁的控制链路。
+向采集、VLA、RL 和网页提供设备接口；数据标签与训练 mask 交给 cobot-dagger，模型动作语义交给 vla-platform，网页运行编排与日志交给 cobot-web。物理设备控制权必须统一，调用方不得另起绕过仲裁的控制链路。
 
 ## 机器与资产
 
 A6000 负责主代码、Git、维护文档、主要开发验证环境、数据处理和离线评测；训练按资源需要在 A6000／已授权训练机进行。Cobot 只部署本项目现场实际需要的硬件、采集、推理、网页或维护组件，不复制仿真资产和完整训练环境。
 
-Cobot 采集及评测数据统一规划在 `/home/agilex/jiaan/data/`。模型放所属项目的 `models/`（上游已有 `checkpoints/` 等目录时保留其源码布局，由配置明确实际权重位置）；同一资产跨项目引用，避免重复复制。现场服务日志、PID 和状态交由 `cobot-ops/runtime/` 管理；训练 checkpoint、配置和指标保留在所属项目 `outputs/<实验>/`。环境、模型、大数据与 runtime 不入 Git。
+Cobot 采集及评测数据统一规划在 `/home/agilex/jiaan/data/`。模型放所属项目的 `models/`（上游已有 `checkpoints/` 等目录时保留其源码布局，由配置明确实际权重位置）；同一资产跨项目引用，避免重复复制。现场服务日志、PID 和状态归实际负责项目；网页编排任务使用 `cobot-web/runtime/`；训练 checkpoint、配置和指标保留在所属项目 `outputs/<实验>/`。环境、模型、大数据与 runtime 不入 Git。
 
 ## 项目协作
 
-CAN、反馈、相机和归位问题由本项目负责；服务存活、PID 与磁盘问题先交 cobot-ops；模型输出异常交 vla-platform。
+CAN、反馈、相机和归位问题由本项目负责；网页任务／PID 问题交 cobot-web，硬件服务和存储问题在实际负责项目排查；模型输出异常交 vla-platform。
 
-先读本次任务涉及的依赖项目入口和接口说明，再修改相关边界；接口变更要记录受影响调用方与验证方式。常用项目：`cobot-control`、`cobot-dagger`、`vla-platform`、`rl-platform`、`cobot-web`、`cobot-ops`，主工作区均在 `/data/LFT-W02_data/jiaan/jiaan/projects/`。需要专题对话时仍共享所属项目，不因此重复建立业务仓库。
+先读本次任务涉及的依赖项目入口和接口说明，再修改相关边界；接口变更要记录受影响调用方与验证方式。常用项目：`cobot-control`、`cobot-dagger`、`vla-platform`、`rl-platform`、`cobot-web`，主工作区均在 `/data/LFT-W02_data/jiaan/jiaan/projects/`。需要专题对话时仍共享所属项目，不因此重复建立业务仓库。
 
 ## 下一步
 
@@ -36,3 +36,5 @@ CAN、反馈、相机和归位问题由本项目负责；服务存活、PID 与�
 旧位置、验收条件和切换／清理规则见迁移记录。
 
 来源：2026-09-27 用户确认的项目划分、机器职责与逐批迁移方案；本轮范围仅初始化。
+
+2026-09-27 归属更新：独立 ops 项目已取消；本次仅修正协作与 runtime 归属，不代表本项目旧业务资产已迁移。
