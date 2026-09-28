@@ -97,3 +97,7 @@ Cobot 数据与模型统一在 /media/agilex/Getea1/jiaan/data/ 和 /media/agile
 USB 掉线重连后已完成已迁移资产的全量收据复核；尚不能据此认定硬件链路根因已消除。RLT 新路径暂停加载、在线状态恢复与历史媒体通过；FluxVLA 固定版本离线 baseline/prefix-RTC 通过；π0.5 两入口只做 dry-run。本批未启动真实 Episode 或机器人动作。
 
 完整路径、占用、各项验证边界及回执见实际 cobot-web/docs/STORAGE.md。证据位于 rl-platform/outputs/migrations/20260928-getea-storage/cobot/（Cobot 去掉末尾 cobot/）。同批源码与项目记录已按各自仓库发布；guide Git 保持由其他会话管理。
+
+## 2026-09-29：硬件规则共用（第一批，源码验收）
+
+CAN/ROS 探测、健康判定和设备任务管理移到 cobot-control/src/cobot_control；网页保留 HTTP、翻译、RLT/console 扩展和输出展示。新增 control/scripts/control.py，无需网页运行。67 个网页兼容测试、3 个独立进程用例通过。未改变动作/ROS 参数，未执行硬件运动；尚未同步现场。来源：cobot_rlt 本轮跨项目整理。

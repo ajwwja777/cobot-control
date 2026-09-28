@@ -8,4 +8,4 @@ set +u
 source "$TASK5_ROS_SETUP"
 set -u
 export PYTHONDONTWRITEBYTECODE=1
-exec /home/agilex/miniconda3/envs/aloha/bin/python "$ROOT/robot/home.py" "${TASK_ARGS[@]}"
+exec "$COBOT_HARDWARE_PYTHON" "$ROOT/robot/home.py" "${TASK_ARGS[@]}"

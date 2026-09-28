@@ -1,5 +1,22 @@
 # Cobot 硬件与独立前后双臂控制
 
+## 项目结构
+
+~~~text
+cobot-control/
+├── src/cobot_control/    # 共用 CAN/ROS 探测、健康判定与任务身份
+├── robot/               # 前后臂、示教协调、归位与恢复
+├── scripts/             # control.py、硬件启动脚本和系统 helper
+├── integrations/        # 已接管的相机 launch 与历史适配
+├── configs/             # 机器配置示例、依赖版本
+├── tests/               # 无硬件进程管理验收
+└── docs/                # 部署、来源与迁移记录
+~~~
+
+安装与独立终端入口见 [DEPLOYMENT.md](docs/DEPLOYMENT.md)。网页和终端共用
+src/cobot_control，健康规则不再维护在网页中。既有运动脚本保持参数和 ROS 协议。
+
+
 统一前后双臂独立控制、CAN、ROS、相机、示教按钮、控制权切换、归位与恢复。保留已验证的控制语义和现场操作方式。
 
 ## 入口与位置

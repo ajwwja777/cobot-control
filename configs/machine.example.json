@@ -1,0 +1,17 @@
+{
+  "ros_setup": "/home/agilex/cobot_magic/Piper_ros_private-ros-noetic/devel/setup.bash",
+  "hardware_python": "/home/agilex/miniconda3/envs/aloha/bin/python",
+  "conda_setup": "/home/agilex/miniconda3/etc/profile.d/conda.sh",
+  "data_root": "/media/agilex/Getea1/jiaan/data",
+  "pose_config": "/media/agilex/Getea1/jiaan/data/motion/poses/home_poses.yaml",
+  "ros_master_uri": "http://localhost:11311",
+  "can_buses": {
+    "front-left": "can_left",
+    "front-right": "can_right",
+    "mid": "can_mid",
+    "rear-left": "can_rear_left",
+    "rear-right": "can_rear_right"
+  },
+  "extension_roots": [],
+  "camera_launch": "integrations/legacy_control/launch/multi_camera_shuai.launch"
+}

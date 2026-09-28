@@ -9,8 +9,8 @@ set --
 # piper_sdk from the registered aloha environment. Make the launch independent
 # of whichever environment started the web service.
 set +u
-source /home/agilex/miniconda3/etc/profile.d/conda.sh
-conda activate aloha
+source "$COBOT_CONDA_SETUP"
+conda activate "$(dirname "$(dirname "$COBOT_HARDWARE_PYTHON")")"
 source "$TASK5_ROS_SETUP"
 set -u
 hash -r

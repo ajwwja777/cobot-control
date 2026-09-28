@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cobot-control"
+version = "0.1.0"
+description = "Cobot hardware control and passive diagnostics"
+requires-python = ">=3.8"
+dependencies = ["PyYAML==6.0.3"]
+
+[project.scripts]
+cobot-control = "cobot_control.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

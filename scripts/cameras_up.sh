@@ -12,4 +12,4 @@ if rosnode list 2>/dev/null | grep -Eq '^/camera_(f|l|r)/camera$'; then
 fi
 export ROS_LOG_DIR="$COBOT_RUNTIME_ROOT/cameras/logs"
 mkdir -p "$ROS_LOG_DIR"
-exec roslaunch "$COBOT_CONTROL_PROJECT_ROOT/integrations/legacy_control/launch/multi_camera_shuai.launch"
+exec roslaunch "$COBOT_CAMERA_LAUNCH"
