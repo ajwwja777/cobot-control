@@ -58,3 +58,9 @@ Cobot已重启，旧平台节点已退出。新项目启动ROS master，显式 f
 scripts/system/cobot-can-recover-one 保存现场/usr/local/sbin同名root helper原始源码，SHA-256 630a3b8ce7f9da3253c52047946e2e3c4e6eaabbadbe2397cd7187d8dc400a20，bash -n通过；未重新安装或更改root权限。
 
 证据：outputs/migrations/20260928-cutover/cobot/ 的hardware-passive-state.json、hardware-passive-stop.json、camera-readonly.json及launch日志。上电使能、示教与运动仍需现场短轮次验收。
+
+## 2026-09-28：旧平台脱离依赖验证
+
+旧cobot-platform完整归档、检查无活动引用后改名隔离；新正式网页冷启动、经网页任务管理启动三相机并得到三路帧，再正常停止，home.sh --help可用。随后旧平台目录已删除；实际硬件入口、日志、位姿均使用本项目，网页仅转发。删除回执见相邻cobot-web/outputs/migrations/20260928-platform-retirement/cobot/retirement.json。
+
+这次只验证启动路径与相机；没有归位、上电使能或示教动作。现场ROS master保留，臂和相机launch已停止；共享已安装ROS/Piper/Astra/aloha仍保留。
