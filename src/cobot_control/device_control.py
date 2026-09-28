@@ -70,10 +70,13 @@ def _home_poses():
         if 'mid' in entry:
             result['mid'].add(name)
     return result
+_camera_launch = Path(SETTINGS.get('camera_launch', CONTROL / 'integrations/legacy_control/launch/multi_camera_shuai.launch'))
+if not _camera_launch.is_absolute():
+    _camera_launch = CONTROL / _camera_launch
 _STOP_MARKERS = {
     'roscore': '/opt/ros/noetic/bin/roscore',
     'arms': str(CONTROL / 'robot/arms/arms.launch'),
-    'cameras': str(CONTROL / 'integrations/legacy_control/launch/multi_camera_shuai.launch'),
+    'cameras': str(_camera_launch),
     'home': str(CONTROL / 'robot/home.py'),
     'recover': str(CONTROL / 'robot/recover.py'),
 }

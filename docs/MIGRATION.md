@@ -105,3 +105,11 @@ CAN/ROS 探测、健康判定和设备任务管理移到 cobot-control/src/cobot
 ## 2026-09-29：职责边界与部署材料
 
 按实际源码、只读现场状态整理，代码先在A6000开发。结构、安装、依赖来源及验证界限见docs/DEPLOYMENT.md；跨项目关系见cobot-web/docs/ARCHITECTURE.md。数据/模型实体未迁移或删除；公共厂商工作区未删除、硬件未重启。guide只写事实、不提交其Git。现场切换与版本见后续发布回执。
+
+## 2026-09-29：正式切换、清理及交付验收
+
+硬件规则与独立管理入口已提交 c933bcb 并同步现场。web 关闭期间，control.py status 仍能识别相机 PID 524014；web 恢复后 PID 与状态一致。重复启动、PID复用、进程组停止和不误伤无关任务由3个真实无害进程测试覆盖；本批没有以真机启停代替离线测试。
+
+Piper/Astra/SDK 精确源码快照、系统配置来源、包版本、机器模板和安装脚本已登记。A6000空目录恢复源码通过；干净catkin构建受Docker代理故障阻挡，仍待验证。公共工作区未删除，aloha未升级。后续自定义camera launch的停止匹配也读取同一机器配置。
+
+主代码位于 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control；现场副本 /home/agilex/jiaan/project/cobot-control。后续收尾版本以Git main和现场.release.json为准。guide仅更新事实摘要，不提交其Git。
