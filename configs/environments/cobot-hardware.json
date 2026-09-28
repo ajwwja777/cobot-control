@@ -1,0 +1,32 @@
+{
+  "captured": "2026-09-28",
+  "host": "Cobot",
+  "os_release": "NAME=\"Ubuntu\"\nVERSION=\"20.04.6 LTS (Focal Fossa)\"\nID=ubuntu\nID_LIKE=debian\nPRETTY_NAME=\"Ubuntu 20.04.6 LTS\"\nVERSION_ID=\"20.04\"\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nVERSION_CODENAME=focal\nUBUNTU_CODENAME=focal\n",
+  "kernel": "5.15.0-102-generic",
+  "system_python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]",
+  "site_dependencies_retained": true,
+  "aloha": {
+    "python": "3.8.19 | packaged by conda-forge | (default, Mar 20 2024, 12:47:35) \n[GCC 12.3.0]",
+    "packages": {
+      "piper-sdk": "0.4.1",
+      "python-can": "4.4.2",
+      "numpy": "1.23.4",
+      "rospkg": "1.5.0",
+      "catkin-pkg": "1.0.0"
+    },
+    "piper_sdk_origin": "/home/agilex/miniconda3/envs/aloha/lib/python3.8/site-packages/piper_sdk/__init__.py"
+  },
+  "ros_packages": [
+    "ros-noetic-roscpp=1.16.0-1focal.20230620.183307",
+    "ros-noetic-roslaunch=1.16.0-1focal.20230620.184457",
+    "ros-noetic-rospy=1.16.0-1focal.20230620.184330",
+    "ros-noetic-sensor-msgs=1.13.1-1focal.20230620.190926",
+    "ros-noetic-std-msgs=0.5.13-1focal.20230620.182217"
+  ],
+  "ros_workspace": {
+    "path": "/home/agilex/cobot_magic/Piper_ros_private-ros-noetic",
+    "setup": "/home/agilex/cobot_magic/Piper_ros_private-ros-noetic/devel/setup.bash",
+    "revision": "not_git",
+    "status": "not_git"
+  }
+}
