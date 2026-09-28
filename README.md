@@ -8,7 +8,7 @@
 - A6000 主工作区：`/data/LFT-W02_data/jiaan/jiaan/projects/cobot-control`。
 - 笔记本对话入口：`D:\Code\jiaan_workspace\cobot-control`。
 - 自有独立仓库：`https://github.com/ajwwja777/cobot-control`（目标分支 `main`）。
-- Cobot 目标部署位置：`/home/agilex/jiaan/project/cobot-control`，按迁移记录分批部署。
+- Cobot 运行副本：`/home/agilex/jiaan/project/cobot-control`，按迁移记录分批部署。
 - 当前阶段：硬件源码与脚本迁入，现场切换结果见 docs/MIGRATION.md。
 
 ## 负责什么
@@ -31,11 +31,11 @@ CAN、反馈、相机和归位问题由本项目负责；网页任务／PID 问�
 
 ## 下一步
 
-选择一个可隔离的设备状态查询入口，核清依赖后复制到新位置，比较新旧状态语义和错误处理；第一批不改变运动逻辑。
+新路径六个臂／交接节点及三相机已在断电条件下验证启动；上电使能、示教、归位与运动待现场短轮次验收。旧平台历史归档完成后再清理。
 
 旧位置、验收条件和切换／清理规则见迁移记录。
 
-来源：2026-09-27 用户确认的项目划分、机器职责与逐批迁移方案；本轮范围仅初始化。
+来源：2026-09-27 用户确认的项目划分、机器职责与逐批迁移方案；初始化历史保留，当前业务进度见迁移记录。
 
 2026-09-27 归属更新：独立 ops 项目已取消；本次仅修正协作与 runtime 归属，不代表本项目旧业务资产已迁移。
 

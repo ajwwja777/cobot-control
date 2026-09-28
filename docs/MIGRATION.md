@@ -46,3 +46,15 @@
 用户确认机械臂安全断电，可重启节点；本轮仍未执行节点重启或归位。RLT 模型验证期间 Cobot 网络连接中断，需恢复连接后重查进程，再停止旧 launch、从新路径启动和核验。旧项目和网页内硬件兼容副本均未删除。Piper/ROS/Astra 已安装工作区与 aloha SDK 是共享依赖，不属于可整棵删除的旧 cobot-platform。
 
 联动细节与证据：同级 rl-platform/docs/MIGRATION.md 及 outputs/migrations/20260927-rlt/。
+
+## 2026-09-28：新硬件路径被动验收
+
+Cobot已重启，旧平台节点已退出。新项目启动ROS master，显式 front_auto_enable=false、mid_auto_enable=false、rear_auto_enable=false 启动六个臂／交接节点，注册正常。新相机入口三路640×480 RGB8约29.9FPS，5秒126–134帧。两次launch按PID/start_ticks核对后SIGINT正常退出；未归位或发动作。
+
+相机缺少calibration提示在旧现场也存在，没有丢失既有标定。Piper/ROS/Astra/aloha安装工作区作为共享依赖保留，不属于旧cobot-platform整棵清理范围。
+
+网页89个跟踪硬件文件已从A6000 Git移除；Cobot实际部署78个重复文件核对新旧SHA后删除。网页保留轻量入口，位姿唯一来源为本项目configs/home_poses.yaml。
+
+scripts/system/cobot-can-recover-one 保存现场/usr/local/sbin同名root helper原始源码，SHA-256 630a3b8ce7f9da3253c52047946e2e3c4e6eaabbadbe2397cd7187d8dc400a20，bash -n通过；未重新安装或更改root权限。
+
+证据：outputs/migrations/20260928-cutover/cobot/ 的hardware-passive-state.json、hardware-passive-stop.json、camera-readonly.json及launch日志。上电使能、示教与运动仍需现场短轮次验收。

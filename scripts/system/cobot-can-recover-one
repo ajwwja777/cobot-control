@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BUS="${1:-}"
+case "$BUS" in
+  can_left|can_right|can_mid) ;;
+  *) printf '拒绝复位未登记的 Recover CAN 接口：%s\n' "$BUS" >&2; exit 2 ;;
+esac
+[[ -e "/sys/class/net/$BUS" ]] || { printf 'CAN 接口不存在：%s\n' "$BUS" >&2; exit 1; }
+printf '仅复位 %s：down → 1 Mbps / restart-ms 100 → up。\n' "$BUS"
+/usr/sbin/ip link set "$BUS" down
+/usr/sbin/ip link set "$BUS" type can bitrate 1000000 restart-ms 100
+/usr/sbin/ip link set "$BUS" up
+sleep 0.25
+STATE="$(/usr/sbin/ip -details link show "$BUS")"
+if [[ "$STATE" != *"state UP"* || "$STATE" != *"bitrate 1000000"* ]]; then
+  printf '%s 自动复位后未恢复 UP / 1 Mbps；停止 Recover。\n' "$BUS" >&2
+  exit 1
+fi
+printf '%s 已恢复 UP / 1 Mbps / restart-ms 100。\n' "$BUS"
