@@ -64,3 +64,11 @@ scripts/system/cobot-can-recover-one 保存现场/usr/local/sbin同名root helpe
 旧cobot-platform完整归档、检查无活动引用后改名隔离；新正式网页冷启动、经网页任务管理启动三相机并得到三路帧，再正常停止，home.sh --help可用。随后旧平台目录已删除；实际硬件入口、日志、位姿均使用本项目，网页仅转发。删除回执见相邻cobot-web/outputs/migrations/20260928-platform-retirement/cobot/retirement.json。
 
 这次只验证启动路径与相机；没有归位、上电使能或示教动作。现场ROS master保留，臂和相机launch已停止；共享已安装ROS/Piper/Astra/aloha仍保留。
+
+## 2026-09-28：共享依赖保全与最终现场状态
+
+已安装Piper ROS源码、Astra相机源码和piper_sdk源文件快照归本项目outputs/environments/hardware-source-20260928.tar.gz，两机保存，70,960,259字节；1,374文件/链接逐项校验通过，SHA-256 e7165305efba36595d6c5058776469c4080a5eace38a300ff05ab993297312d9。configs/environments/cobot-hardware.json记录系统、ROS和aloha/SDK版本；具体范围见HARDWARE_SOURCE.md。这不是完整操作系统镜像或已经验证的从零环境重建。
+
+本会话的被动验收launch已停止；之后网页新建了arms PID148006（15:25:33）及cameras PID158179（15:34:52），并存在后续归位/恢复任务记录。最终只读检查5/5 CAN、5/5臂节点、3/3相机可用，臂反馈新鲜。保留这些后续任务，不将其误判为旧验收残留。网页与RLT清理没有改变这些硬件进程；本会话未执行归位或真机Episode，HIL/同步动作仍需现场验收。
+
+最终快照由rl-platform/outputs/migrations/20260928-retirement/cobot/final-runtime.json保存。已删除旧cobot-platform和旧RLT；共享ROS/Piper/Astra/aloha依赖继续保留，不能整棵删除cobot_magic。
