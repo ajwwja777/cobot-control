@@ -16,9 +16,10 @@ import time
 import uuid
 
 import teleop_core as core
+from asset_storage import require_storage
 
 ROOT=Path(__file__).resolve().parents[1]
-DATA=Path("/home/agilex/jiaan/data/cobot-platform/teleop")
+DATA=Path(os.environ.get("COBOT_TELEOP_DATA_ROOT", "/media/agilex/Getea1/jiaan/data/motion/replays"))
 
 
 @contextmanager
@@ -163,6 +164,7 @@ class Health:
 
 
 def remove_recordings():
+    require_storage(DATA, write=True)
     # Fixed recording root only: do not follow symlinks or recursively delete.
     if DATA.resolve()!=DATA:
         raise RuntimeError("录制目录含符号链接，拒绝删除："+str(DATA))
@@ -194,6 +196,7 @@ def latest_file():
 
 
 def record(state):
+    require_storage(DATA, write=True)
     if not sys.stdin.isatty():raise RuntimeError("请在交互终端运行录制")
     state.wait_ready()
     input("按 Enter 开始记录双前臂状态；再按 Enter 结束保存：")

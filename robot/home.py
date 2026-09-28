@@ -39,9 +39,10 @@ from std_srvs.srv import Trigger
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import task2_homing_core as homing  # noqa: E402
+from asset_storage import require_storage
 
 
-DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs", "home_poses.yaml")
+DEFAULT_CONFIG = os.environ.get("COBOT_POSE_CONFIG", "/media/agilex/Getea1/jiaan/data/motion/poses/home_poses.yaml")
 FRONT_FEEDBACK = {"left": "/puppet/joint_left", "right": "/puppet/joint_right"}
 REAR_FEEDBACK = {
     "left": "/task2/teach/rear_left/joint_states",
@@ -82,6 +83,7 @@ def resolve_selected(config, pose_name, targets):
 
 
 def load_config(path):
+    require_storage(path)
     with open(path, "r") as handle:
         return yaml.safe_load(handle) or {}
 
@@ -315,6 +317,7 @@ def do_capture(args, config):
         topics.update({"rear_" + side: REAR_FEEDBACK[side] for side in ("left", "right")})
     captured = {key: [round(v, 6) for v in measured(topic)] for key, topic in topics.items()}
     path = os.path.abspath(args.config)
+    require_storage(path, write=True)
     with open(path + ".lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         fresh = load_config(path)
@@ -349,6 +352,7 @@ def do_capture(args, config):
 
 def do_delete(args):
     path = os.path.abspath(args.config)
+    require_storage(path, write=True)
     if not args.yes:
         if not sys.stdin.isatty():
             raise RuntimeError("删除 pose 需要现场终端确认，或由网页二次确认后使用 --yes")

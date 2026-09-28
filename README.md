@@ -21,7 +21,7 @@
 
 A6000 负责主代码、Git、维护文档、主要开发验证环境、数据处理和离线评测；训练按资源需要在 A6000／已授权训练机进行。Cobot 只部署本项目现场实际需要的硬件、采集、推理、网页或维护组件，不复制仿真资产和完整训练环境。
 
-Cobot 采集及评测数据统一规划在 `/home/agilex/jiaan/data/`。模型放所属项目的 `models/`（上游已有 `checkpoints/` 等目录时保留其源码布局，由配置明确实际权重位置）；同一资产跨项目引用，避免重复复制。现场服务日志、PID 和状态归实际负责项目；网页编排任务使用 `cobot-web/runtime/`；训练 checkpoint、配置和指标保留在所属项目 `outputs/<实验>/`。环境、模型、大数据与 runtime 不入 Git。
+Cobot 数据与模型统一在 /media/agilex/Getea1/jiaan/data/ 和 /media/agilex/Getea1/jiaan/model/。数据按场景分、模型按项目/模型分；本轮不新增 A6000 权重备份。代码、安装环境、运行日志与 PID 留在 /home/agilex/jiaan/project/<项目>/。完整路径与批次状态见相邻 cobot-web/docs/STORAGE.md。
 
 ## 项目协作
 
@@ -41,7 +41,7 @@ CAN、反馈、相机和归位问题由本项目负责；网页任务／PID 问�
 
 ## 硬件入口
 
-scripts/ 下包含 can_up.sh、roscore_up.sh、arms_up.sh、cameras_up.sh、home.sh、recover.sh、front_mode.sh、front_reset.sh 和 teleop.sh。robot/ 是硬件实现，configs/home_poses.yaml 是位姿唯一来源，runtime/ 保存 ROS/相机/机械臂日志。网页保留同名轻量转发脚本。
+scripts/ 下包含 can_up.sh、roscore_up.sh、arms_up.sh、cameras_up.sh、home.sh、recover.sh、front_mode.sh、front_reset.sh 和 teleop.sh。robot/ 是硬件实现，/media/agilex/Getea1/jiaan/data/motion/poses/home_poses.yaml 是现场位姿唯一来源，configs/home_poses.example.yaml 仅供参考，runtime/ 保存 ROS/相机/机械臂日志。网页保留同名轻量转发脚本。
 
 前臂、中臂、后臂和示教交接节点均纳入 robot/arms。ROS 消息／Astra 驱动和 Piper SDK 是现场安装依赖，不属于旧 cobot-platform 业务目录。源码来源见 [HARDWARE_SOURCE](docs/HARDWARE_SOURCE.md)。
 

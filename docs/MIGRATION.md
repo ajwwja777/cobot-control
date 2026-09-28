@@ -72,3 +72,10 @@ scripts/system/cobot-can-recover-one 保存现场/usr/local/sbin同名root helpe
 本会话的被动验收launch已停止；之后网页新建了arms PID148006（15:25:33）及cameras PID158179（15:34:52），并存在后续归位/恢复任务记录。最终只读检查5/5 CAN、5/5臂节点、3/3相机可用，臂反馈新鲜。保留这些后续任务，不将其误判为旧验收残留。网页与RLT清理没有改变这些硬件进程；本会话未执行归位或真机Episode，HIL/同步动作仍需现场验收。
 
 最终快照由rl-platform/outputs/migrations/20260928-retirement/cobot/final-runtime.json保存。已删除旧cobot-platform和旧RLT；共享ROS/Piper/Astra/aloha依赖继续保留，不能整棵删除cobot_magic。
+
+
+## 2026-09-28：Getea1 统一存储迁移（进行中）
+
+Cobot 数据与模型统一在 /media/agilex/Getea1/jiaan/data/ 和 /media/agilex/Getea1/jiaan/model/。数据按场景分、模型按项目/模型分；本轮不新增 A6000 权重备份。代码、安装环境、运行日志与 PID 留在 /home/agilex/jiaan/project/<项目>/。完整路径与批次状态见相邻 cobot-web/docs/STORAGE.md。
+
+已在 A6000 接入新存储配置及旧路径映射；逐文件复制/校验正在进行，正式网页已在空闲状态正常停止，机械臂/ROS 进程保留。本段不代表旧源目录已经删除。位姿、回放、示范、RLT rollout/Replay、评测和部署权重按 STORAGE.md 归类。最终运行验证及删除回执待本批完成后追加。
