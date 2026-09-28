@@ -13,5 +13,18 @@
     "rear-right": "can_rear_right"
   },
   "extension_roots": [],
-  "camera_launch": "integrations/legacy_control/launch/multi_camera_shuai.launch"
+  "camera_launch": "integrations/legacy_control/launch/multi_camera_shuai.launch",
+  "can_usb_ports": {
+    "1-13.1.2:1.0": "can_left:1000000",
+    "1-13.1.3:1.0": "can_right:1000000",
+    "1-13.1.4:1.0": "can_mid:1000000",
+    "1-13.1.1:1.0": "can_rear_left:1000000",
+    "1-13.2:1.0": "can_rear_right:1000000",
+    "1-4:1.0": "can0:500000"
+  },
+  "camera_serials": {
+    "camera1": "CC1T35300D1",
+    "camera2": "CC1T353010Z",
+    "camera3": "CC1T353011F"
+  }
 }

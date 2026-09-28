@@ -20,14 +20,10 @@ set -uo pipefail
 
 # bus-info -> name:bitrate.  Keep in sync with the hardware; this is the only
 # place the wiring is written down.
-declare -A PORT_MAP=(
-  ["1-13.1.2:1.0"]="can_left:1000000"
-  ["1-13.1.3:1.0"]="can_right:1000000"
-  ["1-13.1.4:1.0"]="can_mid:1000000"
-  ["1-13.1.1:1.0"]="can_rear_left:1000000"
-  ["1-13.2:1.0"]="can_rear_right:1000000"
-  ["1-4:1.0"]="can0:500000"
-)
+CONTROL_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+can_mapping="$(PYTHONPATH="$CONTROL_ROOT/src" /usr/bin/python3 -m cobot_control.wiring can)" || exit 2
+eval "$can_mapping"
+unset can_mapping
 
 declare -A PROFILE_REQUIRES=(
   ["legacy3"]="can_left can_right can_mid"
@@ -209,6 +205,7 @@ for required in ${check_list}; do
   state="$(can_state "${iface}")"
   case "${state}" in
     BUS-OFF|STOPPED)
+      [[ "$PROFILE" == probe ]] && continue
       printf '  %-16s %s -> 正在复位\n' "${required}" "${state}"
       sudo ip link set "${iface}" down
       sudo ip link set "${iface}" up
@@ -217,7 +214,11 @@ for required in ${check_list}; do
   esac
   rx_ok=no; tx_ok=no
   bus_is_alive "${iface}" && rx_ok=yes
-  can_transmit "${iface}" && tx_ok=yes
+  if [[ "$PROFILE" == probe ]]; then tx_ok=not_checked; else can_transmit "${iface}" && tx_ok=yes; fi
+  if [[ "$PROFILE" == probe ]]; then
+    printf "  %s: state=%s receive=%s; transmit not tested (passive)\\n" "$required" "$state" "$rx_ok"
+    continue
+  fi
   if [[ "${rx_ok}" == yes && "${tx_ok}" == yes ]]; then
     printf '  %-16s %s, 收发正常\n' "${required}" "${state:-UNKNOWN}"
   else
@@ -256,7 +257,7 @@ if (( unhealthy )); then
 fi
 
 if [[ "${PROFILE}" == probe ]]; then
-  printf '\n所有接口收发正常。\n'
+  printf '\n被动读取完成；未测试发送、未复位接口。\n'
   exit 0
 fi
 

@@ -1,0 +1,4 @@
+# Replace agilex with the deployment user. Install root-owned 0440 after visudo -cf.
+agilex ALL=(root) NOPASSWD: /usr/local/sbin/cobot-can-recover-one can_left
+agilex ALL=(root) NOPASSWD: /usr/local/sbin/cobot-can-recover-one can_right
+agilex ALL=(root) NOPASSWD: /usr/local/sbin/cobot-can-recover-one can_mid

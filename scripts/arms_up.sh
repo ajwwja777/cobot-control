@@ -9,8 +9,12 @@ set --
 # piper_sdk from the registered aloha environment. Make the launch independent
 # of whichever environment started the web service.
 set +u
-source "$COBOT_CONDA_SETUP"
-conda activate "$(dirname "$(dirname "$COBOT_HARDWARE_PYTHON")")"
+if [[ -f "$COBOT_CONDA_SETUP" ]]; then
+  source "$COBOT_CONDA_SETUP"
+  conda activate "$(dirname "$(dirname "$COBOT_HARDWARE_PYTHON")")"
+else
+  export PATH="$(dirname "$COBOT_HARDWARE_PYTHON"):$PATH"
+fi
 source "$TASK5_ROS_SETUP"
 set -u
 hash -r

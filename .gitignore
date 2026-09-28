@@ -14,3 +14,5 @@ __pycache__/
 
 # Publish this project entry even if an upstream rule ignores agent files.
 !/AGENTS.md
+
+*.egg-info/

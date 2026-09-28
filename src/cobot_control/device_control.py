@@ -873,7 +873,7 @@ class DeviceController:
         jobs = {
             path.stem:self._job(path)
             for directory in self.job_directories for path in directory.glob('*.json')
-            if path.stem in self.components
+            if path.stem in self.components and directory == self._directory(path.stem)
         }
         now = float(self.clock())
         if self.system_probe is not _default_system_probe:
