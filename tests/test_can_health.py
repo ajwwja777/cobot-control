@@ -51,3 +51,25 @@ def test_probe_only_uses_passive_tc_and_sysfs(tmp_path, monkeypatch):
     monkeypatch.setattr(module.subprocess, "check_output", read)
     assert module.read_queues(["can_left"])["can_left"] == dict(ifindex=3, tx_packets=55, queued=10, drops=77)
     assert calls == [["tc", "-s", "-j", "qdisc", "show"]]
+
+def test_recovery_event_requires_queue_to_drain_and_is_not_a_reset():
+    now=[0];events=[];state=dict(ifindex=1,tx_packets=5,queued=10,drops=100)
+    m=CanTxMonitor(lambda _:{"can_left":dict(state)},lambda:now[0],events.append)
+    m.sample(["can_left"]);now[0]=1.2
+    assert m.sample(["can_left"])["can_left"]["last_event"]["kind"]=="stalled"
+    state["tx_packets"]+=1
+    assert m.sample(["can_left"])["can_left"]["phase"]=="checking"
+    state["queued"]=0
+    v=m.sample(["can_left"])["can_left"]
+    assert v["last_event"]["kind"]=="drained" and v["recovery"]=="observed_queue_drained"
+    m.sample(["can_left"])
+    assert [e["kind"] for e in events]==["stalled","drained"]
+
+def test_only_new_drops_are_counted():
+    now=[0];state=dict(ifindex=1,tx_packets=5,queued=0,drops=100)
+    m=CanTxMonitor(lambda _:{"can_left":dict(state)},lambda:now[0])
+    assert m.sample(["can_left"])["can_left"]["new_drops"]==0
+    state["drops"]=103
+    assert m.sample(["can_left"])["can_left"]["new_drops"]==3
+    state["ifindex"]=2;state["drops"]=0
+    assert m.sample(["can_left"])["can_left"]["new_drops"]==0

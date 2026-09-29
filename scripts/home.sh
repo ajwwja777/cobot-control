@@ -8,4 +8,6 @@ set +u
 source "$TASK5_ROS_SETUP"
 set -u
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
+printf '[home] Preparing ROS and pose checks; no movement requested yet.\n'
 exec "$COBOT_HARDWARE_PYTHON" "$ROOT/robot/home.py" "${TASK_ARGS[@]}"

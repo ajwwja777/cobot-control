@@ -164,3 +164,35 @@ home.sh gripper --side left/right --pose reinit 是本次补齐的单夹爪开�
 scripts/can_recover_one.sh can_left|can_right|can_mid 调用系统 helper，只对单路 link down/up 重新配置，不执行完整机械臂 Recover。它是低层维护入口，不应在推理/示教/控制发布者仍活动时直接运行：恢复发送可能让旧目标重新抵达机械臂。现阶段应使用已有受控 Recover，停止相关控制并支撑对应臂，再验证新鲜反馈和当前目标。
 
 后台“只修通信”仍需单独设计和验收：定位故障总线→暂停该侧发布者→清理旧目标→单路重连→核对新鲜反馈并用实测位姿重建保持目标→有界恢复/失败锁定。本批未开启这种自动动作，不以定时 reset 替代它。过热/堵转先消除实际原因；Recover 也适用于控制模式、失能或通信恢复后的重新准备，不限于前臂独立示教。
+
+## CAN 事件、独立 TX 诊断与任务响应（2026-09-29）
+
+~~~bash
+cd /home/agilex/jiaan/project/cobot-control
+python3 scripts/can_diagnose.py --seconds 2 --output runtime/diagnostics/can-latest.json
+python3 scripts/control.py status
+~~~
+
+can_diagnose 只读 tc/sysfs/ip：队列、TX 是否推进、新增 drops 和驱动状态；
+不发 CAN、不改链路、不操作电机。网页/CLI 共用 CanTxMonitor，
+队列持续至少1秒无进展才报堵塞。runtime/diagnostics/can-events.jsonl
+只记录堵塞/排空的状态变化；网页提示“已排空”不代表可以自动继续运动。
+
+现场本次五路队列0、ERROR-ACTIVE、BUS-OFF计数0。
+前左/前右历史 qdisc drops 72402/104449 不代表当前故障。
+旧日志有 USB/gs_usb 线索，但未抓到完整故障时序；无ACK、供电、
+USB完成路径、重复发布或突发发送仍需故障时证据区分。
+
+不要扩大 txqueuelen 或反复发送旧目标来掩盖问题。
+restart-ms 100 仅恢复 BUS-OFF，不能处理所有 TX 卡死。
+can_recover_one.sh 是单路链路维护，不是完整电机 Recover；
+相关发布者必须停止，再按现场流程核对新鲜反馈与保持目标。
+Recover 也可能用于失能、控制模式或通信恢复后的重新准备，
+不能限制为只处理过热/堵转。
+
+无人值守“只修通信”尚未开启：必须先暂停发布、清旧目标、单路重连、
+用实测位姿重建保持目标、禁止自动恢复推理，并有失败锁定。
+本批没有执行 CAN reset、使能/失能或机器人运动。
+
+任务创建先写 Request accepted；Python 子进程 PYTHONUNBUFFERED=1，
+home.sh 输出预检开始。未缩短动作时间或绕过预检。

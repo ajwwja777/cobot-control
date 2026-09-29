@@ -185,3 +185,14 @@ A6000离线设备/任务/健康回归100项通过，含两种消息顺序、部�
 本批正式发布：control 15c1917 / web fd8d182 已 push 并核验远端，Cobot 146/197 文件 SHA 一致。无活动录制/归位/恢复时，仅重载8015；臂 PID1318293、相机 PID1317979、在线RLT PID1436537 及进程 start_ticks 均保持，RLT Session UUID 保留。现场位姿 YAML SHA 未改变。正式HTTP提供的新静态资产SHA与A6000一致，设备API已提供单夹爪reinit入口。
 
 网页 recorder 从已停止记录的 committed/stopped 状态恢复为 idle，generation 重置为0；RLT Session 仍为原有 fault/recorder_not_ready，不声称重启修复了此故障。未发机械臂/CAN/夹爪动作，未重启驱动或模型。回执：A6000 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-web/outputs/model-pose-layout-20260929/release.json；Cobot /home/agilex/jiaan/project/cobot-web/runtime/verification/model-pose-layout-20260929/release.json。
+
+## 2026-09-29: CAN evidence and prompt task output
+
+CanTxMonitor adds new-drop deltas and persistent stalled/drained events; no reset or actuator command.
+scripts/can_diagnose.py is a standalone passive tc/sysfs/ip diagnostic.
+Historical counters do not mark currently healthy links failed. Live five-link queues were empty;
+the historical blockage root cause remains unproven. BUS-OFF auto restart and non-BUS-OFF
+TX stalls are explicitly distinguished in docs/DEPLOYMENT.md. Unattended link repair is NOT enabled.
+DeviceController and home.sh emit early preflight/acceptance output, with Python unbuffered.
+9 tests passed, including blocked/drained transitions, independent process ownership/stopping,
+and real child output observed while it is still running. No hardware motion/restart was tested.

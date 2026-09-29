@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 import yaml
 
-from .can_health import CanTxMonitor
+from .can_health import CanTxMonitor, record_event
 
-_CAN_TX_MONITOR = CanTxMonitor()
+_CAN_TX_MONITOR = CanTxMonitor(event_sink=record_event)
 
 from .paths import PROJECT as PLATFORM, RUNTIME_ROOT, SETTINGS, CONTROL
 SCRIPTS = PLATFORM / 'scripts'
@@ -92,10 +92,12 @@ class DeviceControlError(ValueError):
 
 def _open_process(command, log_path, stdin):
     stream = open(log_path, 'ab', buffering=0)
+    stream.write(b'[control] Request accepted; preparing registered command and preflight. No movement confirmed yet.\n')
     try:
         process = subprocess.Popen(
             command,
             cwd=str(PLATFORM),
+            env=dict(os.environ, PYTHONUNBUFFERED='1'),
             stdin=stdin,
             stdout=stream,
             stderr=subprocess.STDOUT,

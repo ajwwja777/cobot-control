@@ -42,3 +42,20 @@ def test_terminal_adopts_and_stops_http_created_group_without_http(tmp_path):
 def test_read_only_status_does_not_launch(tmp_path):
     ctl = DeviceController(tmp_path, launcher=lambda *args: pytest.fail("launched"), system_probe=lambda: {})
     assert ctl.status()["jobs"] == {}
+
+
+def test_python_child_output_is_visible_before_exit(tmp_path):
+    import time
+    from cobot_control.device_control import _open_process
+    log=tmp_path/"child.log"
+    child=_open_process([sys.executable,"-c","import time; print('preflight started'); time.sleep(10)"],log,subprocess.DEVNULL)
+    try:
+        deadline=time.monotonic()+3
+        while "preflight started" not in log.read_text() and time.monotonic()<deadline:
+            time.sleep(.02)
+        assert child.poll() is None
+        assert "Request accepted" in log.read_text()
+        assert "preflight started" in log.read_text()
+    finally:
+        child.terminate()
+        child.wait(timeout=3)
