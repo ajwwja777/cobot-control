@@ -6,11 +6,12 @@ import threading
 ARMS = ("front-left", "front-right", "mid", "rear-left", "rear-right")
 # Display confirmation only; these do not alter command routing or safety.
 TEACH_ENTRY_SECONDS = 1.0
-TRACKING_WARN_RAD = .15
-TRACKING_CLEAR_RAD = .10
+TEACH_EXIT_SECONDS = 1.5
+TRACKING_WARN_RAD = .25
+TRACKING_CLEAR_RAD = .15
 TRACKING_SEVERE_RAD = .50
-TRACKING_CONFIRM_SECONDS = .8
-SIGNAL_CONFIRM_SECONDS = .4
+TRACKING_CONFIRM_SECONDS = 2.0
+SIGNAL_CONFIRM_SECONDS = 1.0
 SYNC_RECOVERY_SECONDS = .5
 
 
@@ -57,6 +58,7 @@ class DeviceHealth:
         self.rear_modes = {}
         self.rear_exited = {}
         self.teach_display = {}
+        self.teach_exits = {}
         self._lock = threading.Lock()
 
     def evaluate(self, systems, snapshot, *, home_started=0, now=None):
@@ -71,6 +73,32 @@ class DeviceHealth:
         can = systems.get("can_interfaces", {})
         routes = systems.get("control_routes", {})
         values = {}
+        mode = snapshot.get("handover_mode") or ""
+        # Release messages, sticky CAN teach=2 and motor-disable feedback arrive
+        # separately. Only a previously confirmed teaching session earns this
+        # bounded transition; unknown startup modes must still warn.
+        for side in ("left", "right"):
+            arm = feedback.get("rear-" + side, {})
+            button = snapshot.get("teach_" + side)
+            button_fresh = snapshot.is_fresh("teach_" + side)
+            display = self.teach_display.get(side)
+            routed = mode.startswith("manual:") and side in mode.split(":", 1)[1].split("+")
+            complete = arm.get("rear_mode") == "idle_disabled" and button_fresh and button is False and not routed
+            reentered = arm.get("rear_mode") == "teaching" and button_fresh and button is True
+            homed = (arm.get("rear_mode") == "can_holding" and
+                     home_started > self.rear_exited.get("rear-" + side, float("inf")))
+            if side in self.teach_exits:
+                if complete or reentered or homed:
+                    self.teach_exits.pop(side)
+                    self.teach_display.pop(side, None)
+            elif display and display.confirmed:
+                released = (button_fresh and button is False) or (
+                    arm.get("fresh") and (arm.get("teach_status") == 2 or
+                                         arm.get("rear_mode") in ("idle_disabled", "can_holding")))
+                if released and not complete:
+                    self.teach_exits[side] = display_now
+                elif complete:
+                    self.teach_display.pop(side, None)
         for name in ARMS:
             arm = feedback.get(name, {})
             mode = arm.get("rear_mode")
@@ -106,6 +134,12 @@ class DeviceHealth:
                     value = result("handover", raw=raw + " " + str(snapshot.get("handover_fault") or ""))
                 else:
                     value = result("ready", "ready", raw)
+            elif (name.split("-")[-1] in self.teach_exits and
+                  display_now-self.teach_exits[name.split("-")[-1]] < TEACH_EXIT_SECONDS and
+                  arm.get("ctrl_mode") in (0, 1, 2) and arm.get("teach_status") in (0, 1, 2)):
+                # Expected rear-arm disable/mode transition only. All explicit
+                # CAN, ROS, node, protection and TX faults were checked above.
+                value = result("teach_exit", "ready", raw)
             elif mode in ("teaching", "can_holding") and arm.get("enabled_joints") != 6:
                 value = result("disabled", raw=raw)
             elif name in self.rear_exited and now - self.rear_exited[name] > 1:
@@ -125,6 +159,19 @@ class DeviceHealth:
         mode = snapshot.get("handover_mode") or ""
         for side in ("left", "right"):
             front, rear = "front-" + side, "rear-" + side
+            if side in self.teach_exits:
+                pair_issue = next((name for name in (front, rear) if values[name]["phase"] != "ready"), None)
+                waiting = display_now-self.teach_exits[side] < TEACH_EXIT_SECONDS
+                for name in (front, rear):
+                    if values[name]["phase"] == "ready":
+                        values[name] = dict(
+                            result("teach_exit" if waiting and not pair_issue else "sync",
+                                   "ready" if waiting and not pair_issue else "warning",
+                                   feedback.get(name, {}).get("detail", "")),
+                            sync_issue="release", sync_confirmed=False,
+                            paired_arm=pair_issue,
+                            paired_code=values[pair_issue]["code"] if pair_issue else None)
+                continue
             hardware_teach = feedback.get(rear, {}).get("rear_mode") == "teaching"
             teach = snapshot.get("teach_" + side) is True
             if not hardware_teach and not teach:
