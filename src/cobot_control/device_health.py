@@ -77,8 +77,10 @@ class DeviceHealth:
             if not hardware_teach and not teach:
                 continue
             routed = mode.startswith("manual:") and side in mode.split(":", 1)[1].split("+")
-            keys = ("rear_" + side, "front_" + side, "coordinator_" + side, "teach_" + side,
-                    "handover_mode", "handover_fault")
+            # Mode/fault are latched, published only on state changes. Fresh
+            # joint/command/button streams establish live teaching; do not age
+            # out unchanged coordinator state as if it were a heartbeat.
+            keys = ("rear_" + side, "front_" + side, "coordinator_" + side, "teach_" + side)
             stale = [key for key in keys if not snapshot.is_fresh(key)]
             problem, joint_error = "", None
             if not hardware_teach:
