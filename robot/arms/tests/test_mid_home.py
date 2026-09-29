@@ -172,7 +172,8 @@ def test_feedback_health_and_timestamp(monkeypatch):
 def test_mock_move_only_middle_preserves_gripper(monkeypatch, tracking_partial, capsys):
     current=[0]*6+[.02];commands=[];closed=[];checks=[];sleeps=[]
     class Feed:
-        def read(self):return tuple(current)
+        ctrl_mode=1
+        def read(self, allow_standby=False):return tuple(current)
         def close(self):closed.append("feedback")
     class Pub:
         def get_num_connections(self):return 1
@@ -222,3 +223,59 @@ def test_legacy_movement_functions_are_unchanged():
     left={n.name:ast.dump(n) for n in before.body if isinstance(n,ast.FunctionDef) and n.name in names}
     right={n.name:ast.dump(n) for n in after.body if isinstance(n,ast.FunctionDef) and n.name in names}
     assert left==right and len(left)==5
+
+
+def test_standby_read_is_only_allowed_explicitly_and_faults_still_refused(monkeypatch):
+    f=mid.Feedback.__new__(mid.Feedback);f.lock=__import__("threading").Lock()
+    monkeypatch.setattr(mid.rospy.Time,"now",lambda:NS(to_sec=lambda:100.))
+    joints=NS(position=[0]*6+[.02],header=NS(stamp=NS(to_sec=lambda:100.)))
+    status=NS(ctrl_mode=0,arm_status=0,err_code=0,teach_status=0)
+    f.values={"joints":(joints,time.monotonic()),"status":(status,time.monotonic())}
+    with pytest.raises(RuntimeError,match="未就绪"):f.read()
+    assert f.read(allow_standby=True)==tuple(joints.position) and f.ctrl_mode==0
+    for field,value in [("ctrl_mode",2),("arm_status",5),("err_code",63),("teach_status",1)]:
+        setattr(status,field,value)
+        with pytest.raises(RuntimeError,match="未就绪"):f.read(allow_standby=True)
+        setattr(status,field,0)
+
+
+@pytest.mark.parametrize("failure",["disabled","fault","teach","traffic","timeout",None])
+def test_standby_handshake_preserves_measured_pose_and_refuses_unsafe_init(monkeypatch,failure):
+    current=tuple([.04]*6+[.021])
+    class Feed:
+        ctrl_mode=0
+        def read(self,allow_standby=False):
+            assert allow_standby or self.ctrl_mode==1
+            return current
+    feed=Feed();sent=[]
+    state=dict(ctrl_mode=0,arm_status=0,err_code=0,teach_status=0,control_frames=0,
+               motors=[dict(enabled=True,fault_bits="0x0") for _ in range(6)])
+    if failure=="disabled":state["motors"][0]["enabled"]=False
+    if failure=="fault":state["err_code"]=1
+    if failure=="teach":state["teach_status"]=1
+    if failure=="traffic":state["control_frames"]=1
+    def passive(bus,seconds):
+        assert bus=="can_mid" and seconds==.2
+        return state
+    monkeypatch.setattr(mid,"can_feedback",passive)
+    def publish(msg):
+        sent.append(msg)
+        if failure!="timeout":feed.ctrl_mode=1;state["ctrl_mode"]=1
+    monkeypatch.setattr(mid.rospy,"is_shutdown",lambda:False)
+    monkeypatch.setattr(mid.rospy.Time,"now",lambda:NS(to_sec=lambda:100.))
+    ticks=iter([0,3])
+    monkeypatch.setattr(mid.time,"monotonic",lambda:next(ticks))
+    pub=NS(publish=publish)
+    if failure:
+        with pytest.raises(RuntimeError):mid.prepare_control(feed,pub)
+        assert len(sent)==(1 if failure=="timeout" else 0)
+    else:
+        assert mid.prepare_control(feed,pub)==current
+        assert len(sent)==1 and tuple(sent[0].position)==current
+
+
+def test_ready_middle_home_does_not_repeat_initialization(monkeypatch):
+    feed=NS(ctrl_mode=1,read=lambda **kw:tuple([0]*7))
+    monkeypatch.setattr(mid,"can_feedback",Mock(side_effect=AssertionError("unnecessary CAN read")))
+    pub=NS(publish=Mock(side_effect=AssertionError("unnecessary handshake")))
+    assert mid.prepare_control(feed,pub)==tuple([0]*7)

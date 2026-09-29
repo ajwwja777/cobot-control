@@ -20,6 +20,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 import yaml
 
+from .can_health import CanTxMonitor
+
+_CAN_TX_MONITOR = CanTxMonitor()
+
 from .paths import PROJECT as PLATFORM, RUNTIME_ROOT, SETTINGS, CONTROL
 SCRIPTS = PLATFORM / 'scripts'
 _TARGETS = {
@@ -275,7 +279,7 @@ def _classify_arm_feedback(bus: str, latest: Dict[int, bytes]) -> Dict[str, Any]
     rear = bus in ('can_rear_left', 'can_rear_right')
     if error or protected or arm[1]:
         phase = 'error'
-    elif rear and arm[0] == 2 and teach_status == 2:
+    elif rear and arm[0] == 2 and teach_status == 1:
         phase = 'ready' if all(enabled) else 'error'
     elif rear and not any(enabled) and teach_status == 0:
         # Gravity/idle after releasing the rear teach button is intentional.
@@ -287,9 +291,9 @@ def _classify_arm_feedback(bus: str, latest: Dict[int, bytes]) -> Dict[str, Any]
     else:
         phase = 'disabled'
     if rear:
-        rear_mode = ('teaching' if arm[0] == 2 and teach_status == 2 else
+        rear_mode = ('teaching' if arm[0] == 2 and teach_status == 1 else
                      'idle_disabled' if not any(enabled) and teach_status == 0 else
-                     'can_holding' if all(enabled) and arm[0] == 1 else 'unexpected')
+                     'can_holding' if all(enabled) and arm[0] == 1 and teach_status == 0 else 'unexpected')
     else:
         rear_mode = None
     if rear_mode == 'unexpected':
@@ -405,6 +409,11 @@ def _default_system_probe():
     systems['can_interfaces'] = {name:bus in up for name,bus in _CAN_BUSES.items()}
     systems['control_routes'] = _control_routes() if connected else {}
     systems['arms_feedback'] = feedback
+    tx = _CAN_TX_MONITOR.sample(expected)
+    systems['can_tx'] = {name:tx[bus] for name,bus in _CAN_BUSES.items()}
+    stalled = [bus for bus, value in tx.items() if value['phase'] == 'error']
+    if stalled:
+        systems['can'] = {'phase':'error', 'detail':'CAN TX stalled: '+', '.join(stalled)}
     return systems
 
 

@@ -2,7 +2,8 @@
 import argparse
 import getpass
 import json
-from .device_control import DeviceController, DeviceControlError, _default_system_probe
+import time
+from .device_control import DeviceController, DeviceControlError, _default_system_probe, _CAN_TX_MONITOR, _CAN_BUSES
 from .paths import RUNTIME_ROOT
 from . import site_hardware
 
@@ -34,8 +35,10 @@ def main(argv=None):
     control = DeviceController(RUNTIME_ROOT / "devices")
     try:
         if args.command == "status":
+            _CAN_TX_MONITOR.sample(tuple(_CAN_BUSES.values()))
+            time.sleep(1.05)
+            control.system_probe = lambda: _default_system_probe()
             result = control.status()
-            result["systems"] = _default_system_probe()
         elif args.command == "diagnose":
             from .diagnostics import observe
             result = observe(args.seconds)

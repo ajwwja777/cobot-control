@@ -125,3 +125,15 @@ Piper/Astra/SDK 精确源码快照、系统配置来源、包版本、机器模�
 推断：恢复动作同时改变了供电/控制器启动状态与 CAN 接触，优先考虑臂端供电、初始化或连接问题；尚不能区分接触不良与上电后控制器未正常工作，也不能完全排除适配器/共享链路。未修改代码、环境、驱动或运行服务。
 
 证据：A6000 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control/outputs/diagnostics/can-reconnect-20260929/；Cobot /home/agilex/jiaan/project/cobot-control/runtime/diagnostics/can-reconnect-20260929/。包含 can-counters.json 与 kernel.log。
+
+## 2026-09-29：中臂首次归位与示教健康修正
+
+来源：用户首次上电 home 被 mode=0 拒绝、需先 recover；后臂示教无法同步且面板状态错误。核对原驱动后确认：自动使能不等于进入 CAN 控制，原驱动在收到第一条 JointState 时才调用 MotionCtrl_2(1,1,100)，旧 home 却在此前强制要求 mode=1。robot/mid_home.py 现允许无故障 standby 进入准备阶段；被动读取 can_mid 确认六关节已使能、无保护/示教/其他控制帧后，向已有 ROS 驱动发送实测原位姿一次，保留夹爪开度。两秒内确认 ROS/CAN 均 mode=1 且六关节已使能，才执行原限速归位。未嵌入完整 Recover，未增加自动清错/失能/使能，已有模式1路径不重复初始化。控制权、Session 暂停检查和 home/recover 共用锁保留。
+
+显示解析错误：真实后臂示教为 mode=2、teach=1；teach=2 是退出残留。修正 control 的 CAN 分类；只有实际按钮、协调器接管、新鲜指令与前臂跟踪均成立且双方健康才蓝色，夹爪继承前臂（自身故障除外）。增加逐环节 sync_issue、过期话题、最大关节误差、配对故障；前臂不再错误显示后臂的 CAN 原始状态。控制语义、话题、夹持偏移和发送频率未改。
+
+真实不同步另有发送链路故障：左右 can_left/right 接收持续增长，但发送计数连续采样停在 40874/61331，队列各积压10帧，累计 qdisc drops 为53002/35739。托管 arms 日志有88741条发送失败；协调器已经识别按钮并进入 manual/following。12:06:58–12:07:47 内核 gs_usb 多次报告 Unexpected unused echo id，与本次发送堵塞时间重合；现场内核5.15.0-102。只能确定发送通路异常，尚不能断言适配器固件/USB连接/驱动哪一项是最终根因。[Linux 5.15驱动源码](https://github.com/torvalds/linux/blob/v5.15/drivers/net/can/usb/gs_usb.c)可用于理解 echo 上下文，不代表已核验现场 Ubuntu 全部补丁。
+
+新增 src/cobot_control/can_health.py 只读 tc/sysfs：非空队列至少1秒无 TX 进展才报堵塞，历史丢帧数字本身不触发当前故障。网页与独立CLI共用该判定；不自动复位、发送试探帧或改变控制频率。完整恢复前须停止推理/示教并支撑机械臂，沿既有 scoped Recover 执行；本批不擅自操作现场硬件。
+
+证据：A6000 outputs/diagnostics/teach-and-mid-20260929/；现场 runtime/diagnostics/teach-and-mid-20260929/。首轮384项离线回归、收尾190项硬件/网页设备回归通过。中臂冷上电首次归位、堵塞后的受控恢复和真实示教跟踪尚待现场验收；不能把离线通过等同动作已验证。发布及同步结果另记。

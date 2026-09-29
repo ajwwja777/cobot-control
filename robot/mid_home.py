@@ -1,4 +1,4 @@
-"""Middle arm only; use its existing ROS driver, never open CAN/enable."""
+"""Middle home through its ROS owner; passive CAN checks, no direct enable/clear."""
 import errno
 import fcntl
 import json
@@ -12,6 +12,7 @@ import rospy
 from piper_msgs.msg import PiperStatusMsg
 from sensor_msgs.msg import JointState
 import task2_homing_core as homing
+from front_mode import feedback as can_feedback
 
 FEEDBACK = "/puppet/joint_mid"
 COMMAND = "/master/joint_mid"
@@ -76,7 +77,7 @@ class Feedback:
     def status(self, message):
         self.update("status", message)
 
-    def read(self):
+    def read(self, allow_standby=False):
         with self.lock:
             data = dict(self.values)
         now = time.monotonic()
@@ -88,14 +89,60 @@ class Feedback:
         age = rospy.Time.now().to_sec()-stamp
         if stamp <= 0 or age > 0.5 or age < -0.1:
             raise RuntimeError("中臂关节反馈时间戳异常；停止移动")
-        if status.ctrl_mode != 1 or status.arm_status != 0 or status.err_code != 0 or status.teach_status != 0:
+        if status.ctrl_mode not in ((0, 1) if allow_standby else (1,)) or status.arm_status != 0 or status.err_code != 0 or status.teach_status != 0:
             raise RuntimeError("中臂未就绪：mode={} status={} err={} teach={}；不自动使能/清错".format(
                 status.ctrl_mode, status.arm_status, status.err_code, status.teach_status))
+        self.ctrl_mode = status.ctrl_mode
         return homing.validate_pose(list(joint.position)[:7], "mid feedback")
 
     def close(self):
         for sub in self.subs:
             sub.unregister()
+
+
+def require_enabled_feedback():
+    """Listen only; a standby status alone cannot establish motor enable state."""
+    state = can_feedback("can_mid", seconds=0.2)
+    if (state["ctrl_mode"] not in (0, 1) or state["arm_status"] or state["err_code"]
+            or state["teach_status"] or len(state["motors"]) != 6
+            or any(not motor["enabled"] or int(motor["fault_bits"], 16)
+                   for motor in state["motors"])):
+        raise RuntimeError("中臂未使能或有保护/示教状态；未自动恢复，检查机械臂输出后处理")
+    return state
+
+
+def prepare_control(feedback, pub):
+    """Bootstrap clean standby with a measured hold via the existing CAN owner.
+
+    The stock driver enters mode 1 only in its joint callback. Previously home
+    required mode 1 before publishing anything, so first-power-on deadlocked.
+    This is not recovery: no disable, enable, clear-fault or target-pose jump.
+    """
+    current = feedback.read(allow_standby=True)
+    if feedback.ctrl_mode == 1:
+        return current
+    state = require_enabled_feedback()
+    if state["control_frames"]:
+        raise RuntimeError("中臂存在其他 CAN 控制指令；未请求模式初始化")
+    current = feedback.read(allow_standby=True)
+    message = JointState()
+    message.header.stamp = rospy.Time.now()
+    message.name = ["joint"+str(i) for i in range(7)]
+    message.position = list(current)
+    if rospy.is_shutdown():
+        raise RuntimeError("ROS 已退出；未请求模式初始化")
+    pub.publish(message)
+    deadline = time.monotonic()+2.0
+    while True:
+        current = feedback.read(allow_standby=True)
+        if feedback.ctrl_mode == 1:
+            if require_enabled_feedback()["ctrl_mode"] != 1:
+                raise RuntimeError("中臂 ROS/CAN 模式反馈不一致；未发送归位轨迹")
+            print("中臂待机初始化完成：已通过原驱动进入 CAN 控制；未执行 Recover。")
+            return feedback.read()
+        if time.monotonic() >= deadline or rospy.is_shutdown():
+            raise RuntimeError("中臂 CAN 模式初始化超时；未发送归位轨迹，检查驱动/CAN 输出")
+        time.sleep(0.02)
 
 
 def move(target, config, assume_yes=False):
@@ -118,7 +165,7 @@ def _move(target, config, assume_yes=False):
         deadline = time.monotonic()+5.0
         while True:
             try:
-                feedback.read()
+                feedback.read(allow_standby=True)
                 break
             except RuntimeError:
                 if time.monotonic() >= deadline:
@@ -132,7 +179,7 @@ def _move(target, config, assume_yes=False):
         while pub.get_num_connections() == 0:
             if time.monotonic() >= deadline:
                 raise RuntimeError("中臂驱动连接超时；未发移动指令")
-            feedback.read()
+            feedback.read(allow_standby=True)
             time.sleep(0.02)
 
         # Match the front/all-home trajectory contract: complete every remote
@@ -143,7 +190,7 @@ def _move(target, config, assume_yes=False):
         # visible steps even though its waypoints were continuous.
         check_publishers(master)
         check_session()
-        start = feedback.read()
+        start = prepare_control(feedback, pub)
         target = tuple(target[:6]) + (start[6],)
         ramp = homing.plan_ramp(start, target, joint_speed/rate, gripper_speed/rate)
         period = 1.0/rate

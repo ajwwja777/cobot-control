@@ -109,3 +109,23 @@ can_usb_ports与camera_serials在configs/machine.example.json外置。稳定can_
 camera_ws生成配置引用/home/agilex/agilex_ws/devel，但该目录已不存在；新构建不带入它。Desktop/agilex_ws是底盘/导航组件，标准五臂入口不需要。历史adapter仍有source，未删除公共目录；换机使用项目入口，不照搬他人桌面工作区。
 
 已验证源码SHA、空目录恢复、control Python隔离安装、只读状态与进程测试。A6000 Docker Noetic拉取被失效127.0.0.1:7890代理阻断；catkin干净构建、USB/驱动与真实示教仍待验证，不能声称完整硬件重装通过。
+
+## 中臂首次归位与示教状态排查（2026-09-29）
+
+中臂不再需要先运行 Shuai/VR 程序：健康且六关节已使能的 mode=0 会在 home 内通过原 ROS 驱动执行原位姿初始化，进入 mode=1 后沿原限速轨迹归位。该分支不替代故障恢复；失能、保护、示教、过期反馈或其他控制发布者仍拒绝。位姿、速度及夹爪保持规则不变；首次冷上电动作尚待现场验收。
+
+正常后臂物理示教反馈是 mode=2、teach=1，teach=2 是退出残留。蓝色还要求协调器接管、指令和关节反馈新鲜、前臂跟上目标。黄色会指出按钮状态、接管、反馈过期、跟踪误差或 CAN TX 堵塞的具体环节。
+
+在现场已有系统 Python 能导入 PyYAML 时，也可不依赖网页直接只读检查：
+
+~~~bash
+cd /home/agilex/jiaan/project/cobot-control
+python3 scripts/control.py status
+source scripts/environment.sh
+source "$TASK5_ROS_SETUP"
+"$COBOT_HARDWARE_PYTHON" scripts/control.py diagnose --seconds 2
+tc -s qdisc show dev can_left
+tc -s qdisc show dev can_right
+~~~
+
+status/diagnose 增加 systems.can_tx（tx_packets、queued、drops、stalled_seconds）。队列非空且发送计数持续不增长才认定堵塞；ERROR-ACTIVE、RX正常、节点存在都不能证明能发送动作。停止推理/示教并支撑对应臂后，沿现有 scripts/recover.sh front-left 或 front-right 的现场确认流程恢复；该入口已包含受限单臂 CAN 复位，可能短暂失能。刷新网页或重复 launch 不能清除内核发送队列。不要在控制任务活动时直接 reset CAN。

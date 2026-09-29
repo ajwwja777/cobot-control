@@ -1,7 +1,7 @@
 """Subscribe and read CAN only. No publishers, services or motor commands."""
 import threading
 import time
-from .device_control import _default_system_probe
+from .device_control import _default_system_probe, _CAN_TX_MONITOR, _CAN_BUSES
 from .device_health import DeviceHealth
 from .ros_topics import REQUIRED_TOPICS, CAMERA_KEYS, freshness_window_seconds
 
@@ -35,7 +35,8 @@ def observe(seconds=1.5):
                 continue
             kind = Bool if key.startswith("teach_") else String if key.startswith("handover_") else JointState
             subscriptions.append(rospy.Subscriber(topic, kind, callback(key), queue_size=1))
-        time.sleep(seconds)
+        _CAN_TX_MONITOR.sample(tuple(_CAN_BUSES.values()))
+        time.sleep(max(seconds, 1.05))
         systems = _default_system_probe()
         with lock:
             snapshot = Snapshot(dict(values), time.monotonic())
