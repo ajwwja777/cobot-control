@@ -113,3 +113,15 @@ CAN/ROS 探测、健康判定和设备任务管理移到 cobot-control/src/cobot
 Piper/Astra/SDK 精确源码快照、系统配置来源、包版本、机器模板和安装脚本已登记。A6000空目录恢复源码通过；干净catkin构建受Docker代理故障阻挡，仍待验证。公共工作区未删除，aloha未升级。后续自定义camera launch的停止匹配也读取同一机器配置。
 
 主代码位于 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control；现场副本 /home/agilex/jiaan/project/cobot-control。后续收尾版本以Git main和现场.release.json为准。guide仅更新事实摘要，不提交其Git。
+
+## 2026-09-29 12:02：五臂 CAN 无接收后恢复的只读排查
+
+来源：用户提供 can_up.sh 输出，五臂均 ERROR-ACTIVE 且收不到数据；USB 重插未恢复，重新插接同时承载电源和 CAN 的臂端线后恢复。未确认是单一公共连接还是分别操作各臂，不能据此判定某一个接点故障。
+
+核对实际源码：can_up.sh 转发 can_config_cobot.sh task2；“已就绪”只判断名称/UP/bitrate/restart-ms，接收检查是 0.5 秒 rx_packets 是否增长。ERROR-ACTIVE 本身不是故障结论，也不能证明机械臂已在发送反馈。五臂 1 Mbit/s；can0 500 kbit/s 是另一路既有配置。本轮没有执行 can_up、接口复位、控制帧或机械臂运动。
+
+现场 12:02 后只读两秒采样：五路各新增约 6,090 接收帧，rx_errors/tx_errors 增量为零，当前 CAN 接收已恢复。内核 11:55:35–36 有 50 条 gs_usb “Unexpected unused echo id”记录；11:57:37–46 记录五适配器依次断开/重枚举，11:57:55–56 恢复命名。echo 告警不能单独证明根因，拔插后的零错误统计也不能还原拔插前计数。
+
+推断：恢复动作同时改变了供电/控制器启动状态与 CAN 接触，优先考虑臂端供电、初始化或连接问题；尚不能区分接触不良与上电后控制器未正常工作，也不能完全排除适配器/共享链路。未修改代码、环境、驱动或运行服务。
+
+证据：A6000 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control/outputs/diagnostics/can-reconnect-20260929/；Cobot /home/agilex/jiaan/project/cobot-control/runtime/diagnostics/can-reconnect-20260929/。包含 can-counters.json 与 kernel.log。
