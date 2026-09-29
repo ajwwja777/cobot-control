@@ -196,3 +196,10 @@ TX stalls are explicitly distinguished in docs/DEPLOYMENT.md. Unattended link re
 DeviceController and home.sh emit early preflight/acceptance output, with Python unbuffered.
 9 tests passed, including blocked/drained transitions, independent process ownership/stopping,
 and real child output observed while it is still running. No hardware motion/restart was tested.
+
+### Cobot passive verification
+
+Six runtime/doc files selectively synced after pushfa51881; existing ROS drivers were not restarted.
+Standalone can_diagnose.py sampled2s: five queues0,new drops0,ready. Web reports identical link
+health. Seven matched hardware process identities survived the web-only reload unchanged.
+This validates passive detection/output deployment, not automatic recovery under a reproduced fault.
