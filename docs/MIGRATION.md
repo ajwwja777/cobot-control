@@ -170,3 +170,6 @@ src/cobot_control/device_health.py 新增按左右侧独立的显示确认状态
 新增左右独立、最多1.5秒的“正在退出示教”绿色过渡，只对已确认过的示教启用。允许按钮松开、CAN teach=2退出残留和逐步失能消息先后到达；超时未完成仍黄色，期限不因轮询刷新；初始未知模式没有宽限。退出完成、重新进入、显式后续home沿原语义结束过渡。前臂独立示教、前臂失能、后臂保护/掉线/TX堵塞、夹爪自身故障不被过渡隐藏。
 
 A6000离线设备/任务/健康回归100项通过，含两种消息顺序、部分失能、退出卡住、双侧独立、快速再次进入和12类退出期间明确异常。现场当时模型offline、采集无active_mode，五路TX队列为空；已有历史发送失败及用户恢复记录保留，不能将历史CAN故障解释为显示问题。本批未发任何机械臂动作；现场同步与只读检查在发布后追加。
+
+
+本批发布：control ace3b1f / web fdd6cdc 已push并核验远端，Cobot 146/197文件SHA一致。模型offline、无活动采集/归位/恢复/CAN任务时仅重载8015；臂PID1318293和相机PID1317979保持不变，正式API七个设备健康、五路TX队列为空。未请求运动。回执：A6000 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control/outputs/diagnostics/teach-release-20260929/release.json；Cobot /home/agilex/jiaan/project/cobot-control/runtime/diagnostics/teach-release-20260929/release.json。用户已确认上一版进入示教不闪黄；本版运动/退出的实际连续操作颜色仍待用户观察，不能把空闲API检查作为动作验收。
