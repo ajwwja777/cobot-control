@@ -84,7 +84,7 @@ def test_neither_sends_if_either_preflight_fails(side):
 
 def test_no_close_if_one_gripper_never_reaches_maximum():
     sockets,monitors,clock,events=cycle_fixture({"left":.04,"right":100})
-    with pytest.raises(RuntimeError,match="未确认左右"):g.run_cycle(sockets,monitors,clock)
+    with pytest.raises(RuntimeError,match="未确认所选"):g.run_cycle(sockets,monitors,clock)
     for sock in sockets.values():
         sock.sendall.assert_called_once_with(g.command_frame(g.OPEN_UM))
 
@@ -319,3 +319,16 @@ def test_gripper_recovery_refuses_before_command_when_arm_is_unhealthy():
     with pytest.raises(RuntimeError,match="arm unhealthy"):
         g.recover_one_gripper(sock,monitor,clock)
     assert events==[]
+
+
+@pytest.mark.parametrize("side",["left","right"])
+def test_single_gripper_cycle_never_opens_or_commands_other_bus(side):
+    sockets,monitors,clock,events=cycle_fixture()
+    other="right" if side=="left" else "left"
+    g.run_cycle({side:sockets[side]},{side:monitors[side]},clock)
+    sockets[other].sendall.assert_not_called()
+    monitors[other].poll.assert_not_called()
+    commands=[e for e in events if isinstance(e[1],int)]
+    assert [(e[0],e[1]) for e in commands]==[(side,g.OPEN_UM),(side,0)]
+    last_open=max(e[2] for e in events if e[1]=="arrived_"+str(g.OPEN_UM))
+    assert commands[-1][2]-last_open>=.5

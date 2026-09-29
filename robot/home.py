@@ -324,12 +324,12 @@ def do_capture(args, config):
         if not isinstance(fresh, dict):
             raise homing.HomingError("home config must be a mapping")
         entry = fresh.setdefault("poses", {}).setdefault(args.pose, {})
-        if args.arm == "all" and not getattr(args, "targets", None):
-            # Remove explicit rear overrides from an older capture.  Leaving
-            # them behind would make home all ignore the newly captured front
-            # targets and move the rear pair to stale positions.
-            entry.pop("rear_left", None)
-            entry.pop("rear_right", None)
+        # A newly recorded front target is authoritative for its paired rear,
+        # unless that rear was explicitly recorded in this same operation.
+        # Keep all unrelated arms and named poses intact.
+        for side in ("left", "right"):
+            if "front_" + side in captured and "rear_" + side not in captured:
+                entry.pop("rear_" + side, None)
         entry.update(captured)
         with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(path),
                                          prefix=".home-poses-", delete=False) as handle:
@@ -429,6 +429,7 @@ def do_show(resolved):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", choices=("front", "rear", "all", "selected", "capture", "delete", "show", "gripper", "mid"))
+    parser.add_argument("--side", choices=("left", "right", "both"), default="both", help="gripper cycle side; other actions require both")
     parser.add_argument("--targets", help="Comma-separated explicit arm selection for selected/capture")
     parser.add_argument("--arm", choices=("front", "rear", "all", "mid"), default="front",
                         help="capture/show 时选择臂；默认前双臂")
@@ -443,6 +444,8 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.side != "both" and args.action != "gripper":
+        parser.error("--side is only supported for gripper")
     if bool(args.targets) != (args.action == "selected") and not (args.action == "capture" and args.targets):
         parser.error("--targets is required for selected and only accepted for selected/capture")
     if args.targets:
@@ -465,7 +468,7 @@ def main():
         if args.pose != "reinit":
             parser.error("夹爪操作请使用 home.sh gripper --pose reinit")
         import gripper_cycle
-        return gripper_cycle.cli(assume_yes=args.yes)
+        return gripper_cycle.cli(assume_yes=args.yes, sides=("left", "right") if args.side == "both" else (args.side,))
 
     rospy.init_node("task2_home_cli", anonymous=True, disable_signals=True)
     config = load_config(args.config)

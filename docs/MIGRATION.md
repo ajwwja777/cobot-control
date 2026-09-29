@@ -173,3 +173,10 @@ A6000离线设备/任务/健康回归100项通过，含两种消息顺序、部�
 
 
 本批发布：control ace3b1f / web fdd6cdc 已push并核验远端，Cobot 146/197文件SHA一致。模型offline、无活动采集/归位/恢复/CAN任务时仅重载8015；臂PID1318293和相机PID1317979保持不变，正式API七个设备健康、五路TX队列为空。未请求运动。回执：A6000 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-control/outputs/diagnostics/teach-release-20260929/release.json；Cobot /home/agilex/jiaan/project/cobot-control/runtime/diagnostics/teach-release-20260929/release.json。用户已确认上一版进入示教不闪黄；本版运动/退出的实际连续操作颜色仍待用户观察，不能把空闲API检查作为动作验收。
+
+
+## 2026-09-29：三段模型选择、共用模板及选臂位姿
+
+原 home/gripper 实现扩展选择范围，未改 ROS/算法/动作参数。capture 同名合并所选臂；前臂新值由未单独记录的同侧后臂复用，显式后臂实测值保留。单夹爪开合新增 --side left/right，API 接受 gripper-left/right；原单夹爪 Recover 保留。CAN 堵塞检测/单路重连/完整 Recover 边界写入 DEPLOYMENT.md，未开启自动 CAN 重置。
+
+404项Python硬件/设备/任务回归通过（完整 robot/arms/tests、control/tests、web test_device_control.py），覆盖单侧总线隔离、开合顺序及位姿覆盖/共用；网页另有44项DOM测试通过。只做离线和只读现场检查，未记录/覆盖真实位姿、开合、归位或复位 CAN。同步回执在发布后追加。

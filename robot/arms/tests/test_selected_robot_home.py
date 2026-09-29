@@ -44,3 +44,32 @@ def test_selected_front_holds_unselected_front_and_skips_other_owners(monkeypatc
     assert ('wait', home.FRONT_HOME_SERVICE) in calls
     assert not any(item[0]=='wait' and 'rear' in item[1] for item in calls)
     assert calls[-1][1]['front_right'] == (0.1,)*7
+
+
+@pytest.mark.parametrize("targets",["front-left","front-left,front-right","front-left,front-right,rear-left,rear-right","front-left,front-right,mid,rear-left,rear-right"])
+def test_recapture_shares_front_unless_rear_is_explicitly_recorded(tmp_path,monkeypatch,targets):
+    path=tmp_path/"poses.yaml"
+    entry={key:[.4]*7 for key in ("front_left","front_right","rear_left","rear_right","mid")}
+    path.write_text(yaml.safe_dump({"poses":{"shared":entry,"untouched":{"mid":[.1]*7}}}))
+    calls=[]
+    def measure(topic):
+        calls.append(topic)
+        return [.3 if "rear" in topic else .2]*7
+    monkeypatch.setattr(home,"measured",measure)
+    args=NS(arm="front",targets=targets,include_rear=False,pose="shared",config=str(path))
+    assert home.do_capture(args,{})
+    data=yaml.safe_load(path.read_text())
+    selected=targets.split(",")
+    assert len(calls)==len(selected)
+    for side in ("left","right"):
+        if "front-"+side not in selected:continue
+        rear="rear_"+side
+        resolved=home.resolve_selected(data,"shared",("front-"+side,"rear-"+side))
+        assert resolved["front_"+side]==(.2,)*7
+        if "rear-"+side in selected:
+            assert resolved[rear]==(.3,)*7
+        else:
+            assert rear not in data["poses"]["shared"]
+            assert resolved[rear]==(.2,)*7
+    if "mid" not in selected:assert data["poses"]["shared"]["mid"]==[.4]*7
+    assert data["poses"]["untouched"]=={"mid":[.1]*7}

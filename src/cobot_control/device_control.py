@@ -27,7 +27,7 @@ _CAN_TX_MONITOR = CanTxMonitor()
 from .paths import PROJECT as PLATFORM, RUNTIME_ROOT, SETTINGS, CONTROL
 SCRIPTS = PLATFORM / 'scripts'
 _TARGETS = {
-    'home': {'front','rear','all','mid','gripper','selection'},
+    'home': {'front','rear','all','mid','gripper','gripper-left','gripper-right','selection'},
     'recover': {'front-left','front-right','front-pair','rear-left','rear-right','gripper-left','gripper-right','mid','sync'},
 }
 from .paths import POSE_CONFIG
@@ -54,7 +54,7 @@ def _home_poses():
     poses = payload.get('poses') if isinstance(payload, dict) else {}
     if not isinstance(poses, dict):
         poses = {}
-    result = {'front':set(),'rear':set(),'all':set(),'mid':set(),'gripper':{'reinit'}}
+    result = {'front':set(),'rear':set(),'all':set(),'mid':set(),'gripper':{'reinit'},'gripper-left':{'reinit'},'gripper-right':{'reinit'}}
     result.update({arm:set() for arm in SELECTABLE_ARMS})
     for name, entry in poses.items():
         if not isinstance(name, str) or not isinstance(entry, dict):
@@ -551,6 +551,8 @@ class DeviceController:
             except (OSError, ValueError) as error:
                 raise DeviceControlError(str(error)) from error
         if component == 'home':
+            if spec['target'] in ('gripper-left', 'gripper-right'):
+                return [str(SCRIPTS/'home.sh'),'gripper','--side',spec['target'].split('-')[1],'--pose',spec['pose'],'--yes']
             if spec['target'] == 'selection':
                 return [str(SCRIPTS/'home.sh'),'selected','--targets',','.join(spec['arms']),'--pose',spec['pose'],'--yes']
             return [

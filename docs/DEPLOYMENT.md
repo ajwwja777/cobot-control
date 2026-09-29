@@ -133,3 +133,34 @@ status/diagnose 增加 systems.can_tx（tx_packets、queued、drops、stalled_se
 ### 示教颜色的含义
 
 蓝色表示已进入示教工作状态；进入时可先显示“接管中”，不把CAN/ROS消息先后到达当故障。普通跟随差须持续2秒且≥0.25rad才黄色，软信号抖动确认1秒，并保留具体误差/过期话题。已确认示教退出时最多1.5秒显示绿色“正在退出示教”，完成后回到正常状态；超时仍异常才黄色。恢复需连续稳定后再转蓝。明确硬件故障、前臂本体示教或CAN TX堵塞仍立即黄色，不受缓冲影响。具体显示阈值及测试见MIGRATION.md最新节；这不是对机器人控制或安全参数的放宽。
+
+## 位姿共用与单夹爪入口（2026-09-29）
+
+~~~bash
+cd /home/agilex/jiaan/project/cobot-control
+./scripts/home.sh capture --targets front-left,front-right --pose my_pose
+./scripts/home.sh capture --targets front-left,front-right,rear-left,rear-right --pose four_arm_pose
+./scripts/home.sh selected --targets front-left,rear-left --pose my_pose
+./scripts/recover.sh gripper-left
+./scripts/recover.sh gripper-right
+./scripts/home.sh gripper --side left --pose reinit
+./scripts/home.sh gripper --side right --pose reinit
+~~~
+
+以上是独立示例，不是连续执行流程。capture 只读取实测数据；home/recover/开合会动作，保留原交互确认。--side 仅适用于 gripper，省略仍为双夹爪。
+
+正式位姿在 /media/agilex/Getea1/jiaan/data/motion/poses/home_poses.yaml。
+同名 capture 在锁内原子合并所选臂，其他臂/位姿保留。只记录 front-left 时，rear-left 复用它；front-right 同理。重录前臂且本次未记录同侧后臂时，删除该名称中旧后臂覆盖值，防止走旧目标。明确记录四臂/五臂时保留各自实测值；mid 不参与前后共用。selected 支持任意有效单臂/多臂，执行前逐臂预检。网页与 CLI 使用同一实现。
+
+recover.sh gripper-left/right 是已有单夹爪受控恢复。
+home.sh gripper --side left/right --pose reinit 是本次补齐的单夹爪开合：
+只打开、监测和发送所选 CAN 总线，保留70mm张开、到位后0.5秒停顿及闭合顺序。
+其他侧不被轮询或发送；同时选择两侧仍沿原双夹爪流程。
+
+## CAN 发送堵塞能否自动恢复
+
+当前被动诊断检测非空队列持续至少1秒且 tx_packets 不增长；历史 drops 不单独触发当前故障。这是检测，不是自动修复。CAN 的 restart-ms 100 仅针对 BUS-OFF 自动重启，不能覆盖所有 USB/驱动 TX 队列卡死，参见 [Linux SocketCAN 文档](https://docs.kernel.org/networking/can.html)。
+
+scripts/can_recover_one.sh can_left|can_right|can_mid 调用系统 helper，只对单路 link down/up 重新配置，不执行完整机械臂 Recover。它是低层维护入口，不应在推理/示教/控制发布者仍活动时直接运行：恢复发送可能让旧目标重新抵达机械臂。现阶段应使用已有受控 Recover，停止相关控制并支撑对应臂，再验证新鲜反馈和当前目标。
+
+后台“只修通信”仍需单独设计和验收：定位故障总线→暂停该侧发布者→清理旧目标→单路重连→核对新鲜反馈并用实测位姿重建保持目标→有界恢复/失败锁定。本批未开启这种自动动作，不以定时 reset 替代它。过热/堵转先消除实际原因；Recover 也适用于控制模式、失能或通信恢复后的重新准备，不限于前臂独立示教。

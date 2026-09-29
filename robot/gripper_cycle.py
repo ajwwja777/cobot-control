@@ -259,8 +259,9 @@ def clear_gripper_latches(sockets, monitors, clock=time.monotonic):
 
 
 def run_cycle(sockets, monitors, clock=time.monotonic):
-    if set(sockets) != {"left", "right"} or set(monitors) != set(sockets):
-        raise ValueError("必须同时提供左右前臂夹爪")
+    if not sockets or not set(sockets).issubset({"left", "right"}) or set(monitors) != set(sockets):
+        raise ValueError("请选择左、右或左右前臂夹爪")
+    label = "/".join(sockets)
     # Collect and validate both buses before the first command on either bus.
     deadline = clock() + 0.6
     while clock() < deadline:
@@ -272,7 +273,7 @@ def run_cycle(sockets, monitors, clock=time.monotonic):
     def command_both(target):
         poll_all(monitors)
         sent = {}
-        for side in ("left", "right"):
+        for side in sockets:
             sent[side] = monitors[side].clock()
             sockets[side].sendall(command_frame(target))
         return sent
@@ -291,28 +292,30 @@ def run_cycle(sockets, monitors, clock=time.monotonic):
                 return {side: value/1000 for side, value in arrived.items()}
         measured = {side: struct.unpack(">i", monitor.fresh(0x2a8)[:4])[0]/1000
                     for side, monitor in monitors.items()}
-        raise RuntimeError("未确认左右夹爪均到达 %.1f mm，实测 %s mm（可能受夹持物/阻挡影响）；不重试" % (target/1000, measured))
+        raise RuntimeError("未确认所选夹爪均到达 %.1f mm，实测 %s mm（可能受夹持物/阻挡影响）；不重试" % (target/1000, measured))
 
     opened = wait_both(OPEN_UM, command_both(OPEN_UM))
-    print("左右前夹爪已张开：实测 %s mm；停半秒。" % opened, flush=True)
+    print("%s 前夹爪已张开：实测 %s mm；停半秒。" % (label, opened), flush=True)
     deadline = clock() + 0.5
     while clock() < deadline:
         poll_all(monitors)
     closed = wait_both(0, command_both(0))
-    print("左右前夹爪已闭合：实测 %s mm；未发送机械臂关节目标。" % closed, flush=True)
+    print("%s 前夹爪已闭合：实测 %s mm；未发送机械臂关节目标。" % (label, closed), flush=True)
 
 
-def main(assume_yes=False):
+def main(assume_yes=False, sides=("left", "right")):
+    if not sides or len(set(sides)) != len(sides) or not set(sides).issubset({"left", "right"}):
+        raise ValueError("Invalid gripper selection")
     if not assume_yes and not sys.stdin.isatty():
         raise RuntimeError("请在现场交互终端运行")
     if not assume_yes:
-        input("若夹爪报告传感器/驱动器错误，将先保持当前开度并单次清状态；正常后左右张开70mm，停半秒再闭合。确认臂静止、夹持物已处理、手已离开夹爪后按 Enter，取消按 Ctrl-C：")
+        input("若夹爪报告传感器/驱动器错误，将先保持当前开度并单次清状态；正常后所选夹爪张开70mm，停半秒再闭合。确认臂静止、夹持物已处理、手已离开夹爪后按 Enter，取消按 Ctrl-C：")
     from front_mode import operator_guard
-    for side in ("left", "right"):
+    for side in sides:
         operator_guard(side)
     with ExitStack() as stack:
         sockets, monitors = {}, {}
-        for side in ("left", "right"):
+        for side in sides:
             sock = stack.enter_context(socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW))
             ids = sorted(CONTROL_IDS | FEEDBACK_IDS)
             sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER,
@@ -325,9 +328,9 @@ def main(assume_yes=False):
     return 0
 
 
-def cli(assume_yes=False):
+def cli(assume_yes=False, sides=("left", "right")):
     try:
-        return main(assume_yes=assume_yes)
+        return main(assume_yes=assume_yes, sides=sides)
     except (KeyboardInterrupt, EOFError):
         print("已取消；不自动补发闭合/归位指令。", flush=True)
         return 130
