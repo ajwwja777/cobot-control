@@ -1,8 +1,54 @@
 """Read-only display health, independent of the motion safety state machine."""
 import math
 import time
+import threading
 
 ARMS = ("front-left", "front-right", "mid", "rear-left", "rear-right")
+# Display confirmation only; these do not alter command routing or safety.
+TEACH_ENTRY_SECONDS = 1.0
+TRACKING_WARN_RAD = .15
+TRACKING_CLEAR_RAD = .10
+TRACKING_SEVERE_RAD = .50
+TRACKING_CONFIRM_SECONDS = .8
+SIGNAL_CONFIRM_SECONDS = .4
+SYNC_RECOVERY_SECONDS = .5
+
+
+class TeachDisplay:
+    """Hysteresis for soft synchronization observations, never hardware faults."""
+    def __init__(self, now):
+        self.entered = now
+        self.bad_since = None
+        self.good_since = None
+        self.warning = False
+        self.confirmed = False
+
+    def update(self, problem, now, live_feedback, urgent=False):
+        if not problem:
+            self.bad_since = None
+            if self.good_since is None:
+                self.good_since = now
+            if self.warning and now-self.good_since < SYNC_RECOVERY_SECONDS:
+                return "sync_recovering", "warning"
+            self.warning = False
+            self.confirmed = True
+            return "teaching", "teaching"
+        self.good_since = None
+        if self.bad_since is None:
+            self.bad_since = now
+        # Incomplete/nonfinite joint values are not ordinary tracking lag.
+        if urgent or problem in ("joints", "paired_health"):
+            self.warning = True
+        if self.warning:
+            return "sync", "warning"
+        if live_feedback and not self.confirmed and now-self.entered < TEACH_ENTRY_SECONDS:
+            return "teach_transition", "teaching"
+        delay = TRACKING_CONFIRM_SECONDS if problem == "tracking" else SIGNAL_CONFIRM_SECONDS
+        if self.confirmed and now-self.bad_since < delay:
+            return "teaching", "teaching"
+        self.warning = True
+        return "sync", "warning"
+
 def result(code, phase="warning", raw=""):
     return dict(code=code, phase=phase, detail=raw)
 
@@ -10,8 +56,15 @@ class DeviceHealth:
     def __init__(self):
         self.rear_modes = {}
         self.rear_exited = {}
+        self.teach_display = {}
+        self._lock = threading.Lock()
 
     def evaluate(self, systems, snapshot, *, home_started=0, now=None):
+        with self._lock:
+            return self._evaluate(systems, snapshot, home_started=home_started, now=now)
+
+    def _evaluate(self, systems, snapshot, *, home_started=0, now=None):
+        display_now = time.monotonic() if now is None else now
         now = time.time() if now is None else now
         feedback = systems.get("arms_feedback", {})
         nodes = systems.get("arm_nodes", {})
@@ -75,7 +128,9 @@ class DeviceHealth:
             hardware_teach = feedback.get(rear, {}).get("rear_mode") == "teaching"
             teach = snapshot.get("teach_" + side) is True
             if not hardware_teach and not teach:
+                self.teach_display.pop(side, None)
                 continue
+            display = self.teach_display.setdefault(side, TeachDisplay(display_now))
             routed = mode.startswith("manual:") and side in mode.split(":", 1)[1].split("+")
             # Mode/fault are latched, published only on state changes. Fresh
             # joint/command/button streams establish live teaching; do not age
@@ -102,18 +157,29 @@ class DeviceHealth:
                         problem = "joints"
                     else:
                         joint_error = max(abs(a-b) for a,b in pairs)
-                        if joint_error >= .15:
+                        threshold = TRACKING_CLEAR_RAD if display.warning else TRACKING_WARN_RAD
+                        if joint_error >= threshold:
                             problem = "tracking"
             pair_issue = next((name for name in (front,rear) if values[name]["phase"] != "ready"), None)
             if not problem and pair_issue:
                 problem = "paired_health"
-            synchronized = not problem
+            # CAN/ROS loss, protection, disabled motors, wrong local teach
+            # mode, ownership and TX stalls bypass display smoothing.
+            if pair_issue:
+                self.teach_display.pop(side, None)
+                display_code, display_phase = "sync", "warning"
+            else:
+                live_feedback = all(snapshot.is_fresh(k) for k in
+                                    ("rear_"+side, "front_"+side, "teach_"+side))
+                urgent = joint_error is not None and joint_error >= TRACKING_SEVERE_RAD
+                display_code, display_phase = display.update(problem, display_now, live_feedback, urgent)
             for name in (front, rear):
                 if values[name]["phase"] == "ready":
                     values[name] = dict(
-                        result("teaching" if synchronized else "sync", "teaching" if synchronized else "warning",
+                        result(display_code, display_phase,
                                feedback.get(name, {}).get("detail", "")),
-                        sync_issue=problem, stale_topics=stale, handover_mode=mode,
+                        sync_issue=problem, sync_confirmed=not problem,
+                        stale_topics=stale, handover_mode=mode,
                         max_joint_error=joint_error, paired_arm=pair_issue,
                         paired_code=values[pair_issue]["code"] if pair_issue else None)
         for side in ("left", "right"):

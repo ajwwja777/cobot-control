@@ -129,3 +129,7 @@ tc -s qdisc show dev can_right
 ~~~
 
 status/diagnose 增加 systems.can_tx（tx_packets、queued、drops、stalled_seconds）。队列非空且发送计数持续不增长才认定堵塞；ERROR-ACTIVE、RX正常、节点存在都不能证明能发送动作。停止推理/示教并支撑对应臂后，沿现有 scripts/recover.sh front-left 或 front-right 的现场确认流程恢复；该入口已包含受限单臂 CAN 复位，可能短暂失能。刷新网页或重复 launch 不能清除内核发送队列。不要在控制任务活动时直接 reset CAN。
+
+### 示教颜色的含义
+
+蓝色表示已进入示教工作状态；进入时可先显示“接管中”，不把CAN/ROS消息先后到达当故障。短暂跟随差有显示确认窗，持续异常才黄色，并保留具体误差/过期话题。恢复需连续稳定后再转蓝。明确硬件故障、前臂本体示教或CAN TX堵塞仍立即黄色，不受缓冲影响。具体显示阈值及测试见MIGRATION.md最新节；这不是对机器人控制或安全参数的放宽。
