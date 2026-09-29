@@ -157,3 +157,5 @@ src/cobot_control/device_health.py 新增按左右侧独立的显示确认状态
 这些常量只用于只读显示，不进入控制器、不改变机械臂速度/跟随/夹爪/暂停/HIL行为。蓝色接管中不声明已完成同步；sync_confirmed、sync_issue、max_joint_error仍保留瞬时事实。退出示教清理该侧显示状态；用单调时钟计时并序列化共享观察器，避免并发HTTP读扰乱确认时间。
 
 验证：82项设备/任务/健康相关回归通过，包含接管消息先后到达、运动误差短脉冲、持续异常、不同告警/恢复阈值、短时/持续丢反馈、退出再进入，以及前臂单独示教等9类明确异常立即报警。未触发机器人运动、恢复或节点重启；现场发布和被动验证另记。
+
+本批发布：control 8aea6f2 / web 53ceff4 已push并核验远端，同步146/197文件SHA一致；模型offline、采集idle时仅重载正式8015，机械臂PID1318293、相机PID1317979不变。实际HTTP响应与五路TX健康正常。现场回执：control/runtime/diagnostics/teach-display-20260929/release.json；A6000对应control/outputs/diagnostics/teach-display-20260929/release.json。本批不主动运动，移动期间颜色的人工复测仍待用户；不得将离线序列测试写成现场防闪烁已验收。
