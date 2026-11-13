@@ -219,3 +219,12 @@ A6000 AGENTS.md 新增本领域范围、当前待办、独立worktree/任务说�
 robot/teleop.py 增加显式 --web-confirmed 和显示名 --name，供网页已明确点击的开始操作调用；终端的TTY/Enter方式保留。网页录制用stdin的stop行结束；控制连接EOF保留不完整记录，不替换latest。回放只跳过重复TTY输入，仍使用同一套graph/CAN/反馈/源时间戳、限速、起点返回及示教接管保护，不改控制参数。显示名不作为文件名，不支持网页任意shell参数。
 
 3项新增控制回归覆盖命名/显式停止、EOF与latest、非TTY回放仍在示教接管时退出；随跨项目138通过/1既有跳过的回归验证。control一个运行文件随本批10文件SHA安装；用户仅授权Web重载6883→2780447，5个受保护进程保持。现场只读读取16条旧轨迹，未发动作、录制、CAN复位或启停硬件/模型。真实轨迹回放尚未验收。详细网页事实见同级cobot-web/docs/MIGRATION.md，主证据cobot-web/outputs/motion-video-20261113/，现场cobot-web/runtime/verification/motion-video-20261113/。Guide Git未提交/推送。
+
+
+## 2026-11-13 相机重复占用与真实就绪修复
+
+用户要求处理网页新入口和相机启动失败。只读USB FD与ROS graph确认：旧front/quest3 camera-only launch及3个driver占用三相机，新托管组只发布rosout、反复STATUS4118；不是“3节点注册”就已出图。用户授权范围内先停止失败托管相机组，再经PID/启动身份核对，SIGINT结束两个旧相机launch及其子节点，未杀其他会话/USB重置/CAN恢复/机械臂或模型操作。新托管相机launch2810507三路恢复。
+
+源码631c3e854553e31704c3672cddef2d6346b31370已push：camera_guard只读扫描命名Astra节点的USB FD，启动第二组前报告旧/其他持有者的PID/设备，自己的托管组及后代不误拦，不自动结束外部任务。设备系统探测同时核对三路图像发布者；Web c257f0f进一步按真实新鲜帧呈现相机状态。3项新增保护回归及跨项目144相关测试通过，前端149通过。正式重复相机Start复用同PID2810507，未增加进程；约2秒三路源序号增加62/61/61，640×480图像可解码。实际独立无动作短录像37/38/38帧，rawvideo三文件验证通过。
+
+6文件批次SHA安装后仅Web2780447→2820970，已恢复的相机与ROS进程身份保持；无机械臂/模型启停或机器人动作。用户已授权本次必要相机恢复和网页修复；完成后现场交还用户。细节及证据归cobot-web/docs/MIGRATION.md和outputs/motion-camera-followup-20261113，现场cobot-web/runtime/verification/motion-camera-followup-20261113。Guide事实摘要不提交/push。
