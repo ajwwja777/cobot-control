@@ -283,3 +283,36 @@ def test_record_mode_subscribes_only_two_front_topics(monkeypatch):
     state=t.State()
     assert topics==["/puppet/joint_left","/puppet/joint_right"]
     state.close()
+
+
+def test_web_record_uses_explicit_stop_and_preserves_name(tmp_path,monkeypatch):
+    import time as real_time
+    monkeypatch.setattr(t,"DATA",tmp_path)
+    class Input:
+        def isatty(self):return False
+        def readline(self):real_time.sleep(.08);return "stop\n"
+    monkeypatch.setattr(t.sys,"stdin",Input())
+    monkeypatch.setattr("builtins.input",lambda *args:(_ for _ in ()).throw(AssertionError("terminal prompt")))
+    state=SimpleNamespace(wait_ready=lambda:None,sample=lambda:{"front":{s:{"position":list(P)} for s in c.SIDES}})
+    assert t.record(state,confirmed=True,name="轨迹名称")==0
+    path=t.latest_file();header=json.loads(path.read_text().splitlines()[0])
+    assert header["name"]=="轨迹名称" and len(c.load_trace(path))>=2
+
+
+def test_web_record_control_eof_keeps_incomplete_result_and_latest(tmp_path,monkeypatch):
+    import io
+    monkeypatch.setattr(t,"DATA",tmp_path);monkeypatch.setattr(t.sys,"stdin",io.StringIO(""))
+    pointer=tmp_path/"latest.txt";pointer.write_text("old.jsonl\n")
+    state=SimpleNamespace(wait_ready=lambda:None,sample=lambda:{"front":{s:{"position":list(P)} for s in c.SIDES}})
+    with pytest.raises(RuntimeError,match="控制连接中断"):t.record(state,confirmed=True,name="test")
+    assert pointer.read_text()=="old.jsonl\n"
+    rows=[json.loads(line) for line in next(tmp_path.glob("teleop-*.jsonl")).read_text().splitlines()]
+    assert not rows[-1]["complete"] and not rows[-1]["valid_for_replay"]
+
+
+def test_web_replay_still_aborts_on_teaching_takeover(monkeypatch):
+    state,current,emitted,pubs=fake_replay(monkeypatch,fail_after=8)
+    monkeypatch.setattr(t.sys.stdin,"isatty",lambda:False)
+    monkeypatch.setattr("builtins.input",lambda *args:(_ for _ in ()).throw(AssertionError("terminal prompt")))
+    with pytest.raises(RuntimeError,match="takeover"):t.replay(state,Path("fake.jsonl"),[sample(0),sample(.02)],confirmed=True)
+    assert len(emitted)==8 and all(pub.closed for pub in pubs)

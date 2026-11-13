@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import socket
+import signal
 import struct
 import sys
 import threading
@@ -25,6 +26,7 @@ DATA=Path(os.environ.get("COBOT_TELEOP_DATA_ROOT", "/media/agilex/Getea1/jiaan/d
 @contextmanager
 def operation_lock():
     path=ROOT/"runtime/teleop.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+") as handle:
         try:fcntl.flock(handle,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:raise RuntimeError("已有录制/回放命令运行，请先结束它")
@@ -195,26 +197,37 @@ def latest_file():
     return path
 
 
-def record(state):
+def record(state, *, confirmed=False, name=""):
+    trajectory_name=str(name).strip()
+    if len(trajectory_name)>120 or any(ord(ch)<32 for ch in trajectory_name):raise ValueError("轨迹名称无效")
     require_storage(DATA, write=True)
-    if not sys.stdin.isatty():raise RuntimeError("请在交互终端运行录制")
+    if not confirmed and not sys.stdin.isatty():raise RuntimeError("请在交互终端运行录制")
     state.wait_ready()
-    input("按 Enter 开始记录双前臂状态；再按 Enter 结束保存：")
+    if not confirmed:input("按 Enter 开始记录双前臂状态；再按 Enter 结束保存：")
     state.sample()
     DATA.mkdir(parents=True,exist_ok=True)
     name=datetime.now(timezone.utc).strftime("teleop-%Y%m%dT%H%M%S")+"-"+uuid.uuid4().hex[:8]+".jsonl"
     final=DATA/name;pending=DATA/(name+".incomplete")
+    input_error=[]
     stopped=threading.Event()
     def wait_enter():
         try:input()
         except EOFError:pass
         stopped.set()
-    threading.Thread(target=wait_enter,daemon=True).start()
+    if confirmed:
+        def wait_stop():
+            # Web closes stdin on shutdown; only an explicit stop line commits.
+            line=sys.stdin.readline().strip()
+            if line!="stop":input_error.append("网页录制控制连接中断")
+            stopped.set()
+        threading.Thread(target=wait_stop,daemon=True).start()
+    else:
+        threading.Thread(target=wait_enter,daemon=True).start()
     frames=0;error=None;started=time.monotonic()
     print("正在记录50Hz robot state，按 Enter 保存。",flush=True)
     with pending.open("x") as handle:
         header={"type":"header","schema":core.SCHEMA,"source":"front_measured","joint_names":core.JOINT_NAMES,
-                "units":core.UNITS,"rate_hz":core.RATE,"created_utc":datetime.now(timezone.utc).isoformat()}
+                "name":trajectory_name,"units":core.UNITS,"rate_hz":core.RATE,"created_utc":datetime.now(timezone.utc).isoformat()}
         handle.write(json.dumps(header)+"\n")
         deadline=started
         try:
@@ -227,6 +240,7 @@ def record(state):
                 stopped.wait(max(0,deadline-time.monotonic()))
         except KeyboardInterrupt:pass
         except Exception as exc:error=str(exc)
+        error=error or (input_error[0] if input_error else None)
         valid=error is None and frames>=1
         footer={"type":"footer","complete":error is None,"valid_for_replay":valid,"frames":frames,
                 "duration_sec":time.monotonic()-started,"error":error}
@@ -239,15 +253,15 @@ def record(state):
     return 0
 
 
-def replay(state,path,frames):
+def replay(state,path,frames, *, confirmed=False):
     import rospy
     from sensor_msgs.msg import JointState
     from front_mode import operator_guard, feedback, check_ready
-    if not sys.stdin.isatty():raise RuntimeError("请在现场交互终端运行回放")
+    if not confirmed and not sys.stdin.isatty():raise RuntimeError("请在现场交互终端运行回放")
     times,poses=core.retime(frames)
     graph_check();state.wait_ready(replay=True)
     print("记录：%s；轨迹 %.1f 秒（必要时限速放慢）。" % (path,times[-1]),flush=True)
-    input("将先缓慢回到录制起点，再回放双前臂和夹爪；确认物体/路径安全、释放示教按钮后按 Enter，取消按 Ctrl-C：")
+    if not confirmed:input("将先缓慢回到录制起点，再回放双前臂和夹爪；确认物体/路径安全、释放示教按钮后按 Enter，取消按 Ctrl-C：")
     for side in core.SIDES:
         operator_guard(side)
         check_ready(feedback("can_"+side,seconds=.3))
@@ -302,7 +316,10 @@ def main(argv=None):
     ap=argparse.ArgumentParser(description="双前臂robot state录制/回放，Enter开始/结束")
     ap.add_argument("action",choices=["record","replay","info","status","rf"])
     ap.add_argument("file",nargs="?",help="回放/检查指定jsonl；默认最新完整记录")
+    ap.add_argument("--web-confirmed", action="store_true", help="由网页显式开始操作；保留全部硬件检查")
+    ap.add_argument("--name", default="", help="轨迹显示名称，不作为文件路径")
     args=ap.parse_args(argv)
+    signal.signal(signal.SIGINT, signal.default_int_handler)
     if args.action=="rf":
         if args.file:ap.error("rf不接受路径参数；只清空本平台遥操录制目录")
         with operation_lock():return remove_recordings()
@@ -323,7 +340,7 @@ def main(argv=None):
     rospy.init_node("platform_teleop_state",anonymous=True,disable_signals=True)
     with operation_lock():
         state=State(replay=args.action=="replay")
-        try:return record(state) if args.action=="record" else replay(state,path,frames)
+        try:return record(state,confirmed=args.web_confirmed,name=args.name) if args.action=="record" else replay(state,path,frames,confirmed=args.web_confirmed)
         finally:state.close()
 
 
