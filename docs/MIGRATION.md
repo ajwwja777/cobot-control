@@ -210,3 +210,12 @@ This validates passive detection/output deployment, not automatic recovery under
 A6000 AGENTS.md 新增本领域范围、当前待办、独立worktree/任务说明和现场单一负责人的约定；
 笔记本对应目录 AGENTS.md 已从旧“初始化”说明更新为正式接管入口。
 本批该项目仅改文档，无业务代码/环境/资产变更或现场动作。guide仅追加项目事实，不提交Git。
+
+
+## 2026-11-13：命名轨迹与部署原视频接入
+
+来源：用户要求将原 record/replay 命令集成网页；record 放数采，replay 放部署，支持命名，以及可选保存三路不压缩原视频。源码已提交并推送：Web `de4a8af9a3cfa238f56e5a04e5a1533dc4bfd1f3`、control `d1699b647971c5b0f61c8512acdff1b6f33478e1`、dagger `b1c6da1f1de532ef0d44dbb357122671931afb78`。
+
+robot/teleop.py 增加显式 --web-confirmed 和显示名 --name，供网页已明确点击的开始操作调用；终端的TTY/Enter方式保留。网页录制用stdin的stop行结束；控制连接EOF保留不完整记录，不替换latest。回放只跳过重复TTY输入，仍使用同一套graph/CAN/反馈/源时间戳、限速、起点返回及示教接管保护，不改控制参数。显示名不作为文件名，不支持网页任意shell参数。
+
+3项新增控制回归覆盖命名/显式停止、EOF与latest、非TTY回放仍在示教接管时退出；随跨项目138通过/1既有跳过的回归验证。control一个运行文件随本批10文件SHA安装；用户仅授权Web重载6883→2780447，5个受保护进程保持。现场只读读取16条旧轨迹，未发动作、录制、CAN复位或启停硬件/模型。真实轨迹回放尚未验收。详细网页事实见同级cobot-web/docs/MIGRATION.md，主证据cobot-web/outputs/motion-video-20261113/，现场cobot-web/runtime/verification/motion-video-20261113/。Guide Git未提交/推送。
