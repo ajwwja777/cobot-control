@@ -334,6 +334,18 @@ def _control_routes():
         return {}
 
 
+def _camera_image_publishers():
+    from .ros_topics import REQUIRED_TOPICS, CAMERA_KEYS
+    try:
+        master = xmlrpc.client.ServerProxy(os.getenv('ROS_MASTER_URI', 'http://127.0.0.1:11311'),
+            transport=_TimedRosTransport(), allow_none=True)
+        code, _, state = master.getSystemState('/cobot_camera_status')
+        publishers = dict(state[0]) if code == 1 else {}
+        return {key: bool(publishers.get(REQUIRED_TOPICS[key])) for key in CAMERA_KEYS}
+    except (OSError, ValueError, xmlrpc.client.Error):
+        return {key: False for key in CAMERA_KEYS}
+
+
 def _default_system_probe():
     systems = {}
     expected = ('can_left','can_right','can_mid','can_rear_left','can_rear_right')
@@ -386,9 +398,12 @@ def _default_system_probe():
         'phase': 'ready' if driver_count == 5 else ('error' if driver_count or arm_count else 'offline'),
         'detail': str(driver_count)+'/5 arm nodes; '+str(arm_count)+'/3 coordinators',
     }
+    image_publishers = _camera_image_publishers() if connected else {}
+    image_count = sum(image_publishers.values())
     systems['cameras'] = {
-        'phase':'ready' if camera_count == 3 else ('error' if camera_count else 'offline'),
-        'detail':str(camera_count)+'/3 camera nodes',
+        'phase':'ready' if camera_count == 3 and image_count == 3 else ('error' if camera_count else 'offline'),
+        'detail':str(camera_count)+'/3 camera nodes; '+str(image_count)+'/3 image publishers',
+        'image_publishers': image_publishers,
     }
     systems['camera_nodes'] = {
         'camera_left':'/camera_l/camera' in nodes,
@@ -626,6 +641,14 @@ class DeviceController:
                         'stop '+', '.join(blockers)+' before stopping ROS Core'
                     )
             return self._stop_managed(component)
+
+        if component == 'cameras' and action == 'start':
+            from .camera_guard import usb_camera_conflicts
+            conflicts = usb_camera_conflicts(self.process_finder(self._marker(component)))
+            if conflicts:
+                owners = "; ".join("PID " + str(row["pid"]) + " (" + ", ".join(row["devices"]) + ")" for row in conflicts)
+                raise DeviceControlError("相机 USB 已被旧/其他相机进程占用：" + owners
+                    + "；未启动第二组相机。先核对并结束对应相机 launch，再启动；不会自动停止其他任务。")
 
         if component in ('roscore','arms','cameras') and action == 'start':
             marker = self._marker(component)
