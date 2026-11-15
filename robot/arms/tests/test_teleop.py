@@ -127,11 +127,10 @@ def test_manual_takeover_is_recorded_but_aborts_replay(monkeypatch):
     with pytest.raises(RuntimeError,match="接管"):state.sample(replay=True)
 
 
-@pytest.mark.parametrize("kind",["stale","hardware","coordinator","shutdown"])
+@pytest.mark.parametrize("kind",["stale","coordinator","shutdown"])
 def test_runtime_faults_stop_playback(monkeypatch,kind):
     state=ready_state(monkeypatch)
     if kind=="stale":state.cache["front_left"]=(9,state.cache["front_left"][1])
-    elif kind=="hardware":state.cache["status_right"][1].err_code=1
     elif kind=="coordinator":state.cache["fault"][1].data="fault"
     elif kind=="shutdown":state.ros.is_shutdown=lambda:True
     with pytest.raises(RuntimeError):state.sample(replay=True)
@@ -437,4 +436,32 @@ def test_scheduler_delay_is_paced_without_bursts_unless_strict(monkeypatch,stric
     else:
         assert t.replay(state,Path('delay'),[sample(0),sample(.1)],confirmed=True)==0
         assert all(after-before>=1/c.RATE-1e-8 for before,after in zip(stamps,stamps[1:]))
+    assert all(pub.closed for pub in pubs)
+
+
+@pytest.mark.parametrize("status", [None, SimpleNamespace(ctrl_mode=0,arm_status=5,teach_status=1,err_code=63)])
+def test_replay_does_not_duplicate_raw_can_health_with_ros_status(monkeypatch,status):
+    state=ready_state(monkeypatch)
+    for side in c.SIDES:
+        state.cache.pop("status_"+side)
+        if status is not None:state.cache["status_"+side]=(0,status)
+    assert set(state.sample(replay=True)["front"])==set(c.SIDES)
+
+
+def test_raw_can_fault_still_stops_replay():
+    health=t.Health()
+    health.error="can_right: ctrl_mode=0 arm_status=7 raw=0007000000000000"
+    with pytest.raises(RuntimeError,match="can_right.*arm_status=7"):
+        health.check()
+
+
+def test_control_loop_still_stops_on_raw_can_fault(monkeypatch):
+    state,current,emitted,pubs=fake_replay(monkeypatch)
+    from contextlib import nullcontext
+    def check():
+        if len(emitted)>=8:raise RuntimeError("CAN健康检查失败：can_right raw fault")
+    monkeypatch.setattr(t,"Health",lambda:nullcontext(SimpleNamespace(check=check)))
+    with pytest.raises(RuntimeError,match="can_right raw fault"):
+        t.replay(state,Path("fake.jsonl"),[sample(0),sample(.02)],confirmed=True)
+    assert len(emitted)==8
     assert all(pub.closed for pub in pubs)

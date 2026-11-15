@@ -43,10 +43,8 @@ class State:
             self.subs.append(rospy.Subscriber(topic,JointState,self.callback("front_"+side),queue_size=1))
         if replay:
             from std_msgs.msg import Bool,String
-            from piper_msgs.msg import PiperStatusMsg
             for side in core.SIDES:
                 topics=[("teach_"+side,"/task2/teach/rear_"+side+"/teach_active",Bool),
-                        ("status_"+side,"/puppet/arm_status_"+side,PiperStatusMsg),
                         ("fault_"+side,"/task2/teach/rear_"+side+"/fault",String)]
                 for key,topic,kind in topics:
                     self.subs.append(rospy.Subscriber(topic,kind,self.callback(key),queue_size=1))
@@ -91,9 +89,11 @@ class State:
             for side in core.SIDES:
                 if self.get("teach_"+side,.5).data:
                     raise RuntimeError("示教按钮已接管，停止回放；不会自动继续")
-                status=self.get("status_"+side,.2)
-                if status.ctrl_mode!=1 or status.arm_status or status.teach_status or status.err_code:
-                    raise RuntimeError("前臂不是健康CAN保持状态："+side)
+                # Health owns hardware validation from raw CAN frames.  Do not
+                # veto playback again using the independently cached ROS status:
+                # it is assembled by the driver from several SDK reads and can
+                # disagree with current CAN feedback.  Teach/fault topics above
+                # retain their separate control-ownership responsibilities.
             return {"front":front}
 
     def wait_ready(self,replay=False):
