@@ -137,7 +137,7 @@ class Health:
                 with socket.socket(socket.AF_CAN,socket.SOCK_RAW,socket.CAN_RAW) as sock:
                     sock.setsockopt(socket.SOL_CAN_RAW,socket.CAN_RAW_FILTER,b"".join(struct.pack("=II",i,0x7ff) for i in sorted(FEEDBACK_IDS)))
                     sock.bind(("can_"+side,));sock.settimeout(.02)
-                    monitor=Monitor(sock,label="左前夹爪" if side=="left" else "右前夹爪");warmup=time.monotonic()+.6
+                    monitor=Monitor(sock,label="左前夹爪" if side=="left" else "右前夹爪",mode_transition_grace=.3);warmup=time.monotonic()+.6
                     while not self.stop.is_set():
                         monitor.poll()
                         if time.monotonic()<warmup:continue
@@ -156,7 +156,7 @@ class Health:
         return self
 
     def check(self):
-        if self.error:raise RuntimeError("CAN健康检查失败："+self.error)
+        if self.error:raise RuntimeError("回放硬件/控制状态检查未通过："+self.error)
         if any(time.monotonic()-self.latest.get(s,0)>.2 for s in core.SIDES):
             raise RuntimeError("双前臂CAN健康检查已过期")
 

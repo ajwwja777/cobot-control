@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One open/close cycle on a stationary front gripper, without joint/mode commands."""
 import math
+import json
 from contextlib import ExitStack
 import socket
 import struct
@@ -70,11 +71,15 @@ def recovery_frame(opening_um, operation):
 
 
 class Monitor:
-    def __init__(self, sock, clock=time.monotonic, label="夹爪"):
+    def __init__(self, sock, clock=time.monotonic, label="夹爪", *, mode_transition_grace=0.0):
         self.sock, self.clock = sock, clock
         self.label = label
         self.latest = {}
         self.anchor = None
+        # Only the replay caller opts in. Stationary gripper/recovery commands
+        # keep requiring CAN mode on every sample.
+        self.mode_transition_grace = mode_transition_grace
+        self.mode_transition_since = None
 
     def poll(self):
         try:
@@ -101,7 +106,26 @@ class Monitor:
 
     def check_arm(self):
         status = self.fresh(0x2a1)
-        if status[0] != 1 or status[1] or status[3] or int.from_bytes(status[6:8], "big"):
+        fault = status[1] or status[3] or int.from_bytes(status[6:8], "big")
+        # Firmware can briefly report mode 2 with teach=0 and no fault during
+        # replay. This is not an active drag-teach sample (teach=1), nor proof
+        # of a CAN bus failure. Confirm only this exact mode-only transition.
+        transient = (self.mode_transition_grace > 0 and status[0] == 2 and not fault)
+        if transient and self.mode_transition_since is None:
+            self.mode_transition_since = self.clock()
+            print(json.dumps({"event":"replay_mode_transition", "side":self.label,
+                              "raw":status.hex(), "grace_seconds":self.mode_transition_grace},
+                             ensure_ascii=False), flush=True)
+        if status[0] == 1 and not fault and self.mode_transition_since is not None:
+            print(json.dumps({"event":"replay_mode_recovered", "side":self.label,
+                              "duration_seconds":self.clock()-self.mode_transition_since,
+                              "raw":status.hex()}, ensure_ascii=False), flush=True)
+            self.mode_transition_since = None
+        pending = transient and self.clock()-self.mode_transition_since < self.mode_transition_grace
+        if transient and not pending:
+            raise RuntimeError("%s 控制模式持续未回到CAN控制超过%.0fms（非CAN故障码）：ctrl_mode=2 teach_status=0 err_code=0x0000 raw=%s；停止回放，不自动切模式" %
+                               (self.label,self.mode_transition_grace*1000,status.hex()))
+        if (status[0] != 1 or fault) and not pending:
             raise RuntimeError("%s 前臂未处于健康 CAN 保持状态：ctrl_mode=%d arm_status=%d teach_status=%d err_code=0x%04x raw=%s；本脚本不恢复机械臂" %
                                (self.label,status[0],status[1],status[3],int.from_bytes(status[6:8],"big"),status.hex()))
         for canid in range(0x261, 0x267):

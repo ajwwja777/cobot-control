@@ -341,3 +341,51 @@ def test_bad_arm_status_identifies_side_and_exact_raw_values():
     text=str(failure.value)
     assert "左前夹爪" in text and "ctrl_mode=0" in text and "arm_status=7" in text
     assert "teach_status=2" in text and "err_code=0x0100" in text and "raw=0007000200000100" in text
+
+
+def replay_mode_monitor():
+    clock=Clock();clock.now=10
+    monitor=ready_monitor();monitor.clock=clock;monitor.mode_transition_grace=.3
+    return monitor,clock
+
+
+def test_replay_mode2_idle_transient_recovers_without_stopping(capsys):
+    monitor,clock=replay_mode_monitor()
+    monitor.latest[0x2a1]=(10,bytes.fromhex("0200010000000000"))
+    monitor.check()
+    clock.now=10.29;monitor.check()
+    monitor.latest[0x2a1]=(clock.now,bytes.fromhex("0100010000000000"))
+    monitor.check()
+    assert monitor.mode_transition_since is None
+    text=capsys.readouterr().out
+    assert "replay_mode_transition" in text and "replay_mode_recovered" in text
+
+
+def test_replay_mode2_persistent_still_refuses_loss_of_command_mode():
+    monitor,clock=replay_mode_monitor()
+    monitor.latest[0x2a1]=(10,bytes.fromhex("0200010000000000"))
+    monitor.check();clock.now=10.31
+    with pytest.raises(RuntimeError,match="ctrl_mode=2"):monitor.check()
+
+
+@pytest.mark.parametrize("raw", ["0200010100000000", "0200010200000000", "0207010000000000", "0200010000000001", "0000010000000000"])
+def test_mode_grace_does_not_hide_teach_fault_or_disable(raw):
+    monitor,clock=replay_mode_monitor()
+    monitor.latest[0x2a1]=(10,bytes.fromhex(raw))
+    with pytest.raises(RuntimeError):monitor.check()
+
+
+def test_mode_grace_still_checks_motors_and_feedback_age():
+    monitor,clock=replay_mode_monitor()
+    monitor.latest[0x2a1]=(10,bytes.fromhex("0200010000000000"))
+    monitor.latest[0x261]=(10,bytes(8))
+    with pytest.raises(RuntimeError,match="关节1失能"):monitor.check()
+    monitor,clock=replay_mode_monitor()
+    monitor.latest[0x2a1]=(9,bytes.fromhex("0200010000000000"))
+    with pytest.raises(RuntimeError,match="过期"):monitor.check()
+
+
+def test_stationary_gripper_commands_still_reject_mode2_immediately():
+    monitor=ready_monitor()
+    monitor.latest[0x2a1]=(10,bytes.fromhex("0200010000000000"))
+    with pytest.raises(RuntimeError,match="ctrl_mode=2"):monitor.check()
