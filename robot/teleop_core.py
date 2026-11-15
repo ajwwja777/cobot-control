@@ -22,6 +22,17 @@ def position(values):
     return list(values)  # Preserve measured values; no nominal range check or clamp.
 
 
+def command_position(values):
+    """Match the existing driver's 0..80 mm gripper command before timing.
+
+    Recorded feedback stays untouched; a corrupt negative gripper sample must
+    not add a fictitious multi-metre excursion to the shared replay timeline.
+    """
+    result=position(values)
+    result[6]=min(.08,max(0.0,result[6]))
+    return result
+
+
 def load_trace(path):
     path=Path(path)
     if not path.is_file():
@@ -56,10 +67,10 @@ def load_trace(path):
 
 def retime(frames):
     times=[0.0]
-    poses=[{s:frames[0]["front"][s]["position"] for s in SIDES}]
+    poses=[{s:command_position(frames[0]["front"][s]["position"]) for s in SIDES}]
     for before,after in zip(frames,frames[1:]):
         dt=after["t"]-before["t"]
-        pair={s:after["front"][s]["position"] for s in SIDES}
+        pair={s:command_position(after["front"][s]["position"]) for s in SIDES}
         for s in SIDES:
             for i,(a,b) in enumerate(zip(poses[-1][s],pair[s])):
                 speed=GRIPPER_SPEED if i==6 else JOINT_SPEED
@@ -78,6 +89,8 @@ def interpolate(times,poses,t):
 
 
 def start_path(current,target):
+    current={s:command_position(current[s]) for s in SIDES}
+    target={s:command_position(target[s]) for s in SIDES}
     duration=.02
     for s in SIDES:
         for i,(a,b) in enumerate(zip(current[s],target[s])):

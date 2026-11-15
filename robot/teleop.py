@@ -283,7 +283,7 @@ def replay_sequence(state,traces, *, confirmed=False, strict_monitoring=False):
     with ExitStack() as stack:
         health=stack.enter_context(Health())
         current=state.sample(replay=True)
-        last={s:core.position(current["front"][s]["position"]) for s in core.SIDES}
+        last={s:core.command_position(current["front"][s]["position"]) for s in core.SIDES}
         pubs={s:rospy.Publisher("/task2/policy/joint_"+s,JointState,queue_size=1,tcp_nodelay=True) for s in core.SIDES}
         for pub in pubs.values():stack.callback(pub.unregister)
         deadline=time.monotonic()+3

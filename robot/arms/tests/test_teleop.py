@@ -465,3 +465,39 @@ def test_control_loop_still_stops_on_raw_can_fault(monkeypatch):
         t.replay(state,Path("fake.jsonl"),[sample(0),sample(.02)],confirmed=True)
     assert len(emitted)==8
     assert all(pub.closed for pub in pubs)
+
+
+def test_corrupt_gripper_feedback_cannot_stall_shared_replay_timeline():
+    import copy
+    frames=[sample(0),sample(.02),sample(.04)]
+    for f in frames:
+        for side in c.SIDES:f["front"][side]["position"][6]=.0001
+    frames[1]["front"]["right"]["position"][6]=-1.8515
+    original=copy.deepcopy(frames)
+    times,poses=c.retime(frames)
+    assert times==pytest.approx([0,.02,.04])
+    assert poses[1]["right"][6]==0
+    assert frames==original
+    assert poses[0]["left"]==frames[0]["front"]["left"]["position"]
+
+
+def test_gripper_targets_are_timed_in_driver_range_with_limits_preserved():
+    end=list(P);end[6]=.5
+    times,poses=c.retime([sample(0),sample(.02,position=end)])
+    assert poses[-1]["left"][6]==.08
+    assert times[-1]==pytest.approx((.08-P[6])/c.GRIPPER_SPEED)
+    previous=c.interpolate(times,poses,0)
+    for i in range(1,math.ceil(times[-1]*c.RATE)+1):
+        pair=c.interpolate(times,poses,i/c.RATE)
+        for side in c.SIDES:
+            assert 0<=pair[side][6]<=.08
+            assert abs(pair[side][6]-previous[side][6])<=c.GRIPPER_SPEED/c.RATE+1e-9
+        previous=pair
+
+
+def test_start_path_uses_same_command_gripper_range():
+    current={s:[*P[:6],-1.8515] for s in c.SIDES}
+    target={s:[*P[:6],.0001] for s in c.SIDES}
+    path=list(c.start_path(current,target))
+    assert len(path)<10
+    assert all(0<=pair[s][6]<=.0001 for pair in path for s in c.SIDES)
