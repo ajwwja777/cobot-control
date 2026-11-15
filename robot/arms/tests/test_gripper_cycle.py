@@ -332,3 +332,12 @@ def test_single_gripper_cycle_never_opens_or_commands_other_bus(side):
     assert [(e[0],e[1]) for e in commands]==[(side,g.OPEN_UM),(side,0)]
     last_open=max(e[2] for e in events if e[1]=="arrived_"+str(g.OPEN_UM))
     assert commands[-1][2]-last_open>=.5
+
+
+def test_bad_arm_status_identifies_side_and_exact_raw_values():
+    monitor=g.Monitor(None,clock=lambda:1,label="左前夹爪")
+    monitor.latest[0x2a1]=(1,bytes.fromhex("0007000200000100"))
+    with pytest.raises(RuntimeError) as failure:monitor.check_arm()
+    text=str(failure.value)
+    assert "左前夹爪" in text and "ctrl_mode=0" in text and "arm_status=7" in text
+    assert "teach_status=2" in text and "err_code=0x0100" in text and "raw=0007000200000100" in text

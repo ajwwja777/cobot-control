@@ -102,11 +102,13 @@ class Monitor:
     def check_arm(self):
         status = self.fresh(0x2a1)
         if status[0] != 1 or status[1] or status[3] or int.from_bytes(status[6:8], "big"):
-            raise RuntimeError("前臂未处于健康 CAN 保持状态；本脚本不恢复机械臂")
+            raise RuntimeError("%s 前臂未处于健康 CAN 保持状态：ctrl_mode=%d arm_status=%d teach_status=%d err_code=0x%04x raw=%s；本脚本不恢复机械臂" %
+                               (self.label,status[0],status[1],status[3],int.from_bytes(status[6:8],"big"),status.hex()))
         for canid in range(0x261, 0x267):
             bits = self.fresh(canid)[5]
             if bits & 0xbf or not bits & 0x40:
-                raise RuntimeError("前臂关节失能或保护；本脚本不使能关节/清错")
+                raise RuntimeError("%s 前臂关节%d失能或保护：status=0x%02x；本脚本不使能关节/清错" %
+                                   (self.label,canid-0x260,bits))
         joints = tuple(v for canid in [0x2a5, 0x2a6, 0x2a7]
                        for v in struct.unpack(">ii", self.fresh(canid)))
         if self.anchor is not None and any(abs(a-b) > math.degrees(0.03)*1000

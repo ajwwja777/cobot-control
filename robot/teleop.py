@@ -142,7 +142,7 @@ class Health:
                         monitor.poll()
                         if time.monotonic()<warmup:continue
                         monitor.check();self.latest[side]=time.monotonic()
-            except Exception as exc:self.error=str(exc)
+            except Exception as exc:self.error=self.error or ("can_"+side+": "+str(exc))
         for side in core.SIDES:
             thread=threading.Thread(target=observe,args=(side,),daemon=True);thread.start();self.threads.append(thread)
         deadline=time.monotonic()+3
