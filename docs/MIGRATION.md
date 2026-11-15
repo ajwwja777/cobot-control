@@ -246,3 +246,12 @@ Web record控制行discard使本轮临时.jsonl.incomplete关闭后删除，返�
 单轨迹回放9f261d…日志确认left跟踪偏差>0.2rad触发退出，具体机械原因缺旧遥测、未重新运动。用户确认现场动作正常，要求减少保护退出；344ccb2新增--strict-monitoring（Webee99b78，默认关），关闭时跟踪/调度仅告警并记录具体关节和误差，迟到重设节拍不突发补帧，取消到位确认超时。原手动停止/示教接管、真实硬件故障/失能/陈旧反馈、通道互斥/无效指令/限速保持；没有声称绝不退出。
 
 三台Dabai USB描述符只读确认1632×1224@30 MJPEG；launch明确传三路原生4:3高清参数，录制最大1080高保持原比例1440×1080。用户授权Web/三相机重载及10s诊断，原相机组正常Stop/Start，不碰机械臂/CAN/模型。8个非相机保护身份保持，高清最终三路303帧无队列/序号错误（Dagger49e662b RGB直通，CRF14）。105相关CPU/1跳过、155前端及最终9领域编码回归通过，默认软阈值/严格阈值/迟到不追赶皆有模拟验证。Web最终839683、相机833869/833965/833966/833967；未真实回放/归位，用户自行复核。完整记录与证据归cobot-web/docs/MIGRATION.md和outputs/replay-tracking-20261115；guide不提交/push。
+
+
+## 2026-11-15 回放 CAN 保持状态异常回访
+
+用户截图motion-0bb049d8c7374aa3bf00abbc7996d794在回放后因Health/Monitor.check_arm的原始0x2a1 CAN保持状态检查失败退出。不是跟踪/调度软阈值，也不是录像队列。旧错误没有臂侧/模式/状态/原始字节，不能确定具体坏值或唯一硬件原因；不能用事后健康状态断言旧反馈是误报。用户已自行再次启动dc5eb6，agent始终只读，不打断。并发2s被动监听left402/right401条0x2a1全部[ctrl1,status0,teach0,err0]。中臂mode2与该检查无关，因为此Health只监听左右前臂。
+
+Control3921d6f（111针对性CPU通过）只补诊断：CAN-hold错误含左右标签、ctrl_mode/arm_status/teach_status/err_code/raw8bytes，关节故障含关节号和状态位，Health保留首个出错总线。两运行文件在push后旧/新SHA备份同步，现存回放已加载代码不变、下次CLI调用生效；未更改保护条件/阈值或恢复逻辑，未Web/模型/相机/机械臂启停、CAN复位、实际回放或运动命令。
+
+后续用户run dc5eb6最终exit130、日志“已停止；不自动归位或恢复策略”，不是正常完成码0，但没有再次记录CAN错误，不推断谁发中断。三路录像saved/workercomplete，4574/4574/4575帧，received一致、queue0/peak4/2/4，1440×1080约152.5s，header帧数/时长可读；验证了本轮持续录像，不等于故障已根治。完整事实和证据cobot-web/outputs/replay-can-state-20261115（field-before.log、passive-can-status.json、tests.log、after-source-only.json、production-video-headers.json），现场cobot-web/runtime/verification/replay-can-state-20261115/source-install.json及备份。Guide仅摘要，不提交/push。
