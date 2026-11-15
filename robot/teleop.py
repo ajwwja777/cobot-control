@@ -209,6 +209,7 @@ def record(state, *, confirmed=False, name=""):
     name=datetime.now(timezone.utc).strftime("teleop-%Y%m%dT%H%M%S")+"-"+uuid.uuid4().hex[:8]+".jsonl"
     final=DATA/name;pending=DATA/(name+".incomplete")
     input_error=[]
+    discarded=threading.Event()
     stopped=threading.Event()
     def wait_enter():
         try:input()
@@ -218,33 +219,40 @@ def record(state, *, confirmed=False, name=""):
         def wait_stop():
             # Web closes stdin on shutdown; only an explicit stop line commits.
             line=sys.stdin.readline().strip()
-            if line!="stop":input_error.append("网页录制控制连接中断")
+            if line=="discard":discarded.set()
+            elif line!="stop":input_error.append("网页录制控制连接中断")
             stopped.set()
         threading.Thread(target=wait_stop,daemon=True).start()
     else:
         threading.Thread(target=wait_enter,daemon=True).start()
     frames=0;error=None;started=time.monotonic()
     print("正在记录50Hz robot state，按 Enter 保存。",flush=True)
-    with pending.open("x") as handle:
-        header={"type":"header","schema":core.SCHEMA,"source":"front_measured","joint_names":core.JOINT_NAMES,
-                "name":trajectory_name,"units":core.UNITS,"rate_hz":core.RATE,"created_utc":datetime.now(timezone.utc).isoformat()}
-        handle.write(json.dumps(header)+"\n")
-        deadline=started
-        try:
-            while not stopped.is_set():
-                sample={"front":state.sample()["front"],"type":"sample","t":time.monotonic()-started}
-                handle.write(json.dumps(sample,separators=(",",":"))+"\n");frames+=1
-                if frames%50==0:handle.flush()
-                deadline+=1/core.RATE
-                if deadline<time.monotonic():deadline=time.monotonic()+1/core.RATE
-                stopped.wait(max(0,deadline-time.monotonic()))
-        except KeyboardInterrupt:pass
-        except Exception as exc:error=str(exc)
-        error=error or (input_error[0] if input_error else None)
-        valid=error is None and frames>=1
-        footer={"type":"footer","complete":error is None,"valid_for_replay":valid,"frames":frames,
-                "duration_sec":time.monotonic()-started,"error":error}
-        handle.write(json.dumps(footer)+"\n");handle.flush();os.fsync(handle.fileno())
+    try:
+        with pending.open("x") as handle:
+            header={"type":"header","schema":core.SCHEMA,"source":"front_measured","joint_names":core.JOINT_NAMES,
+                    "name":trajectory_name,"units":core.UNITS,"rate_hz":core.RATE,"created_utc":datetime.now(timezone.utc).isoformat()}
+            handle.write(json.dumps(header)+"\n")
+            deadline=started
+            try:
+                while not stopped.is_set():
+                    sample={"front":state.sample()["front"],"type":"sample","t":time.monotonic()-started}
+                    handle.write(json.dumps(sample,separators=(",",":"))+"\n");frames+=1
+                    if frames%50==0:handle.flush()
+                    deadline+=1/core.RATE
+                    if deadline<time.monotonic():deadline=time.monotonic()+1/core.RATE
+                    stopped.wait(max(0,deadline-time.monotonic()))
+            except KeyboardInterrupt:pass
+            except Exception as exc:error=str(exc)
+            error=error or (input_error[0] if input_error else None)
+            valid=error is None and frames>=1
+            footer={"type":"footer","complete":error is None,"valid_for_replay":valid,"frames":frames,
+                    "duration_sec":time.monotonic()-started,"error":error}
+            handle.write(json.dumps(footer)+"\n");handle.flush();os.fsync(handle.fileno())
+    finally:
+        if discarded.is_set() and pending.exists():pending.unlink()
+    if discarded.is_set():
+        print("已放弃本轮轨迹录制；未保存、未替换最新记录。",flush=True)
+        return 10
     os.replace(pending,final)
     if valid:
         pointer=DATA/("latest-"+uuid.uuid4().hex+".tmp");pointer.write_text(name+"\n");os.replace(pointer,DATA/"latest.txt")
@@ -254,13 +262,19 @@ def record(state, *, confirmed=False, name=""):
 
 
 def replay(state,path,frames, *, confirmed=False):
+    return replay_sequence(state,[(path,frames)],confirmed=confirmed)
+
+
+def replay_sequence(state,traces, *, confirmed=False):
     import rospy
     from sensor_msgs.msg import JointState
     from front_mode import operator_guard, feedback, check_ready
     if not confirmed and not sys.stdin.isatty():raise RuntimeError("请在现场交互终端运行回放")
-    times,poses=core.retime(frames)
+    if not traces or len(traces)>32:raise ValueError("请选择1–32条回放轨迹")
+    # Prepare the whole sequence before entering any publishing context.
+    plans=[(path,*core.retime(frames)) for path,frames in traces]
     graph_check();state.wait_ready(replay=True)
-    print("记录：%s；轨迹 %.1f 秒（必要时限速放慢）。" % (path,times[-1]),flush=True)
+    print("顺序回放 %d 条轨迹（必要时限速放慢）。" % len(plans),flush=True)
     if not confirmed:input("将先缓慢回到录制起点，再回放双前臂和夹爪；确认物体/路径安全、释放示教按钮后按 Enter，取消按 Ctrl-C：")
     for side in core.SIDES:
         operator_guard(side)
@@ -303,11 +317,14 @@ def replay(state,path,frames, *, confirmed=False):
                 if all(max(abs(a-b) for a,b in zip(sample["front"][s]["position"][:6],target[s][:6]))<=.03
                        and abs(sample["front"][s]["position"][6]-target[s][6])<=.003 for s in core.SIDES):return
             raise RuntimeError("未确认双前臂/夹爪到达目标；停止")
-        print("缓慢回到录制起点…",flush=True)
-        for pair in core.start_path(last,poses[0]):emit(pair)
-        settle(poses[0]);print("开始轨迹回放。",flush=True)
-        for i in range(math.ceil(times[-1]*core.RATE)+1):emit(core.interpolate(times,poses,i/core.RATE))
-        settle(poses[-1])
+        for index,(path,times,poses) in enumerate(plans,1):
+            print("轨迹 %d/%d · %s：缓慢移动到起始位姿…" % (index,len(plans),path),flush=True)
+            for pair in core.start_path(last,poses[0]):emit(pair)
+            settle(poses[0])
+            print("轨迹 %d/%d：开始回放。" % (index,len(plans)),flush=True)
+            for i in range(math.ceil(times[-1]*core.RATE)+1):emit(core.interpolate(times,poses,i/core.RATE))
+            settle(poses[-1])
+            print("轨迹 %d/%d：已到达终点。" % (index,len(plans)),flush=True)
     print("回放完成，前双臂保持终点；未归位/失能后臂。",flush=True)
     return 0
 
@@ -318,7 +335,10 @@ def main(argv=None):
     ap.add_argument("file",nargs="?",help="回放/检查指定jsonl；默认最新完整记录")
     ap.add_argument("--web-confirmed", action="store_true", help="由网页显式开始操作；保留全部硬件检查")
     ap.add_argument("--name", default="", help="轨迹显示名称，不作为文件路径")
+    ap.add_argument("--next", dest="next_files", action="append", default=[], help="按顺序追加下一条回放轨迹；可重复，最多共32条")
     args=ap.parse_args(argv)
+    if args.next_files and args.action!="replay":ap.error("--next只用于replay")
+    if len(args.next_files)>31:ap.error("回放最多32条轨迹")
     signal.signal(signal.SIGINT, signal.default_int_handler)
     if args.action=="rf":
         if args.file:ap.error("rf不接受路径参数；只清空本平台遥操录制目录")
@@ -332,15 +352,17 @@ def main(argv=None):
     if args.action=="record" and args.file:ap.error("record不需要文件参数")
     frames=None;path=None
     if args.action!="record":
-        path=Path(args.file).resolve() if args.file else latest_file();frames=core.load_trace(path)
-        times,_=core.retime(frames)
-        print("%s：%d帧，录制轨迹%.1fs，限速回放%.1fs。" % (path,len(frames),frames[-1]["t"]-frames[0]["t"],times[-1]),flush=True)
+        paths=[Path(args.file).resolve() if args.file else latest_file()]+[Path(value).resolve() for value in args.next_files]
+        traces=[]
+        for path in paths:
+            frames=core.load_trace(path);times,_=core.retime(frames);traces.append((path,frames))
+            print("%s：%d帧，录制轨迹%.1fs，限速回放%.1fs。" % (path,len(frames),frames[-1]["t"]-frames[0]["t"],times[-1]),flush=True)
         if args.action=="info":return 0
     import rospy
     rospy.init_node("platform_teleop_state",anonymous=True,disable_signals=True)
     with operation_lock():
         state=State(replay=args.action=="replay")
-        try:return record(state,confirmed=args.web_confirmed,name=args.name) if args.action=="record" else replay(state,path,frames,confirmed=args.web_confirmed)
+        try:return record(state,confirmed=args.web_confirmed,name=args.name) if args.action=="record" else replay_sequence(state,traces,confirmed=args.web_confirmed)
         finally:state.close()
 
 

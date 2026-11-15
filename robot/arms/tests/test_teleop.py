@@ -316,3 +316,80 @@ def test_web_replay_still_aborts_on_teaching_takeover(monkeypatch):
     monkeypatch.setattr("builtins.input",lambda *args:(_ for _ in ()).throw(AssertionError("terminal prompt")))
     with pytest.raises(RuntimeError,match="takeover"):t.replay(state,Path("fake.jsonl"),[sample(0),sample(.02)],confirmed=True)
     assert len(emitted)==8 and all(pub.closed for pub in pubs)
+
+
+def test_sequence_keeps_publishers_and_smoothly_bridges_all_joints(monkeypatch,capsys):
+    state,current,emitted,pubs=fake_replay(monkeypatch)
+    initial={s:list(current[s]) for s in c.SIDES}
+    first_end=[.08,.02,0,0,0,0,.03]
+    second_start=[-.08,-.02,0,0,0,0,.01]
+    second_end=[-.04,-.01,0,0,0,0,.02]
+    plans=[(Path("one.jsonl"),[sample(0),sample(.02,position=first_end)]),
+           (Path("two.jsonl"),[sample(0,position=second_start),sample(.02,position=second_end)])]
+    assert t.replay_sequence(state,plans,confirmed=True)==0
+    assert len(pubs)==2 and all(pub.closed for pub in pubs)
+    previous=initial;left=[initial["left"]]
+    for topic,pos in emitted:
+        side=topic.rsplit("_",1)[1]
+        for index,(a,b) in enumerate(zip(previous[side],pos)):
+            speed=c.GRIPPER_SPEED if index==6 else c.JOINT_SPEED
+            assert abs(b-a)<=speed/c.RATE+1e-8
+        previous[side]=pos
+        if side=="left":left.append(pos)
+    end_index=next(i for i,pair in enumerate(left) if pair==first_end)
+    start_index=next(i for i,pair in enumerate(left) if i>end_index and pair==second_start)
+    assert start_index-end_index>20
+    assert any(second_start[0]<pair[0]<first_end[0] for pair in left[end_index+1:start_index])
+    assert current=={s:second_end for s in c.SIDES}
+    assert "轨迹 2/2" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("exception",[RuntimeError("teach takeover"),KeyboardInterrupt()])
+def test_sequence_aborts_during_bridge_and_never_starts_next(monkeypatch,capsys,exception):
+    state,current,emitted,pubs=fake_replay(monkeypatch)
+    original=c.start_path;calls=[]
+    def path(start,target):
+        calls.append(target)
+        for index,pair in enumerate(original(start,target)):
+            if len(calls)==2 and index==4:raise exception
+            yield pair
+    monkeypatch.setattr(c,"start_path",path)
+    second=[-.1,0,0,0,0,0,.01]
+    with pytest.raises(type(exception)):
+        t.replay_sequence(state,[(Path("one"),[sample(0),sample(.02)]),
+                                 (Path("two"),[sample(0,position=second),sample(.02,position=second)])],confirmed=True)
+    assert len(calls)==2 and all(pub.closed for pub in pubs)
+    assert "轨迹 2/2：开始回放" not in capsys.readouterr().out
+    assert current["left"]!=second
+
+
+def test_sequence_validates_later_trace_before_importing_ros_or_moving(tmp_path,monkeypatch):
+    first=write_trace(tmp_path/"one.jsonl",[sample(0),sample(.02)])
+    second=write_trace(tmp_path/"two.jsonl",[sample(0),sample(.02)],complete=False)
+    monkeypatch.setitem(sys.modules,"rospy",None)
+    with pytest.raises(ValueError,match="完整"):
+        t.main(["replay",str(first),"--next",str(second),"--web-confirmed"])
+    with pytest.raises(SystemExit):t.main(["record","--next",str(first)])
+
+
+def test_sequence_cli_preserves_explicit_order_and_one_state(tmp_path,monkeypatch):
+    from contextlib import nullcontext
+    paths=[write_trace(tmp_path/(str(i)+".jsonl"),[sample(0),sample(.02)]) for i in range(2)]
+    monkeypatch.setitem(sys.modules,"rospy",SimpleNamespace(init_node=Mock()))
+    state=SimpleNamespace(close=Mock());monkeypatch.setattr(t,"State",lambda **kw:state)
+    monkeypatch.setattr(t,"operation_lock",lambda:nullcontext())
+    run=Mock(return_value=0);monkeypatch.setattr(t,"replay_sequence",run)
+    assert t.main(["replay",str(paths[1]),"--next",str(paths[0]),"--next",str(paths[1]),"--web-confirmed"])==0
+    assert [path for path,frames in run.call_args.args[1]]==[paths[1],paths[0],paths[1]]
+    assert run.call_args.kwargs["confirmed"] and state.close.call_count==1
+
+
+def test_web_discard_removes_only_current_pending_and_keeps_latest(tmp_path,monkeypatch):
+    import io
+    monkeypatch.setattr(t,"DATA",tmp_path);monkeypatch.setattr(t.sys,"stdin",io.StringIO("discard\n"))
+    original=write_trace(tmp_path/"old.jsonl",[sample(0),sample(.02)])
+    before=original.read_bytes();pointer=tmp_path/"latest.txt";pointer.write_text("old.jsonl\n")
+    state=SimpleNamespace(wait_ready=lambda:None,sample=lambda:{"front":{s:{"position":list(P)} for s in c.SIDES}})
+    assert t.record(state,confirmed=True,name="discard")==10
+    assert original.read_bytes()==before and pointer.read_text()=="old.jsonl\n"
+    assert sorted(path.name for path in tmp_path.iterdir())==["latest.txt","old.jsonl"]
