@@ -255,3 +255,12 @@ Web record控制行discard使本轮临时.jsonl.incomplete关闭后删除，返�
 Control3921d6f（111针对性CPU通过）只补诊断：CAN-hold错误含左右标签、ctrl_mode/arm_status/teach_status/err_code/raw8bytes，关节故障含关节号和状态位，Health保留首个出错总线。两运行文件在push后旧/新SHA备份同步，现存回放已加载代码不变、下次CLI调用生效；未更改保护条件/阈值或恢复逻辑，未Web/模型/相机/机械臂启停、CAN复位、实际回放或运动命令。
 
 后续用户run dc5eb6最终exit130、日志“已停止；不自动归位或恢复策略”，不是正常完成码0，但没有再次记录CAN错误，不推断谁发中断。三路录像saved/workercomplete，4574/4574/4575帧，received一致、queue0/peak4/2/4，1440×1080约152.5s，header帧数/时长可读；验证了本轮持续录像，不等于故障已根治。完整事实和证据cobot-web/outputs/replay-can-state-20261115（field-before.log、passive-can-status.json、tests.log、after-source-only.json、production-video-headers.json），现场cobot-web/runtime/verification/replay-can-state-20261115/source-install.json及备份。Guide仅摘要，不提交/push。
+
+
+## 2026-11-16 回放重复 ROS 状态退出修复
+
+用户再次报告回放中断且现场事后 CAN 正常。实际 motion-8633d21d177a45f9b15039500f4b00d6 在约43s退出，strict_monitoring=false，错误为 State.sample 的“前臂不是健康CAN保持状态：right”，不是原始CAN Monitor、跟踪偏差或视频错误。旧日志未留当时ROS字段，不能证明具体瞬态值或断言硬件从未异常。原驱动 PublishSlaveArmState 分字段多次 GetArmStatus，回放又同时运行独立原始CAN Health，形成重复、独立缓存的一票退出。
+
+Control553bfe5移除回放ROS PiperStatusMsg订阅和重复状态值退出，原始CAN Health/Monitor保持唯一硬件判定；保留原始CAN故障/失能/反馈过期、ROS关节新鲜度、故障topic、手动停止/示教接管、控制通道互斥及指令限速。没有禁用真实故障检查，也没有改变夹爪/恢复等其他命令的判断。114项CPU回归通过，含异常/过期或缺失ROS状态不再重复否决、控制循环中原始CAN故障仍立即停止并注销发布器。
+
+源码先提交push，现场空闲后取得teleop.lock，仅robot/teleop.py按旧新SHA备份原子同步，下次回放自动生效，无需Web重载；10个匹配硬件/Web进程身份保持，无回放、运动、CAN复位、模型或硬件生命周期操作。真实连续回放由用户复核，不能把离线测试称为真机完整通过。证据 /data/LFT-W02_data/jiaan/jiaan/projects/cobot-web/outputs/replay-single-can-20261116/（tests.log、source-install.json）；现场cobot-web/runtime/verification/replay-single-can-20261116/（motion-before.json、teleop.py.before、source-install.json）。
