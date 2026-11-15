@@ -393,3 +393,48 @@ def test_web_discard_removes_only_current_pending_and_keeps_latest(tmp_path,monk
     assert t.record(state,confirmed=True,name="discard")==10
     assert original.read_bytes()==before and pointer.read_text()=="old.jsonl\n"
     assert sorted(path.name for path in tmp_path.iterdir())==["latest.txt","old.jsonl"]
+
+
+@pytest.mark.parametrize("strict",[False,True])
+def test_tracking_lag_is_warning_by_default_and_strict_mode_exits(monkeypatch,capsys,strict):
+    state,current,emitted,pubs=fake_replay(monkeypatch)
+    original=sys.modules['rospy'].Publisher
+    def publisher(topic,*args,**kw):
+        pub=original(topic,*args,**kw);publish=pub.publish
+        def stationary_left(msg):
+            before=list(current['left']);publish(msg)
+            if topic.endswith('_left'):current['left']=before
+        pub.publish=stationary_left;return pub
+    monkeypatch.setattr(sys.modules['rospy'],'Publisher',publisher)
+    end=[.3,0,0,0,0,0,.02];frames=[sample(0),sample(1,position=end)]
+    if strict:
+        with pytest.raises(RuntimeError,match="跟踪偏差"):t.replay(state,Path('lag'),frames,confirmed=True,strict_monitoring=True)
+    else:assert t.replay(state,Path('lag'),frames,confirmed=True)==0
+    assert all(pub.closed for pub in pubs)
+    text=capsys.readouterr().out
+    assert ('replay_tracking_error' if strict else 'replay_tracking_warning') in text
+    assert '"joint": 1' in text and '"measured_rad"' in text
+
+
+@pytest.mark.parametrize("strict",[False,True])
+def test_scheduler_delay_is_paced_without_bursts_unless_strict(monkeypatch,strict):
+    state,current,emitted,pubs=fake_replay(monkeypatch)
+    clock=t.time.monotonic.__self__;calls=[];stamps=[]
+    original=sys.modules['rospy'].Publisher
+    def publisher(topic,*args,**kw):
+        pub=original(topic,*args,**kw);publish=pub.publish
+        def receive(msg):
+            if topic.endswith('_left'):stamps.append(clock.now)
+            publish(msg)
+        pub.publish=receive;return pub
+    monkeypatch.setattr(sys.modules['rospy'],'Publisher',publisher)
+    def graph():
+        calls.append(True)
+        if len(calls)==3:clock.now+=.08
+    monkeypatch.setattr(t,'graph_check',graph)
+    if strict:
+        with pytest.raises(RuntimeError,match="调度延迟"):t.replay(state,Path('delay'),[sample(0),sample(.1)],confirmed=True,strict_monitoring=True)
+    else:
+        assert t.replay(state,Path('delay'),[sample(0),sample(.1)],confirmed=True)==0
+        assert all(after-before>=1/c.RATE-1e-8 for before,after in zip(stamps,stamps[1:]))
+    assert all(pub.closed for pub in pubs)

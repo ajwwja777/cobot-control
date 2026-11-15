@@ -261,11 +261,11 @@ def record(state, *, confirmed=False, name=""):
     return 0
 
 
-def replay(state,path,frames, *, confirmed=False):
-    return replay_sequence(state,[(path,frames)],confirmed=confirmed)
+def replay(state,path,frames, *, confirmed=False, strict_monitoring=False):
+    return replay_sequence(state,[(path,frames)],confirmed=confirmed,strict_monitoring=strict_monitoring)
 
 
-def replay_sequence(state,traces, *, confirmed=False):
+def replay_sequence(state,traces, *, confirmed=False, strict_monitoring=False):
     import rospy
     from sensor_msgs.msg import JointState
     from front_mode import operator_guard, feedback, check_ready
@@ -291,17 +291,37 @@ def replay_sequence(state,traces, *, confirmed=False):
             state.sample(replay=True);health.check()
             if time.monotonic()>deadline:raise RuntimeError("回放控制通道未连接")
             time.sleep(.02)
-        tick=time.monotonic();graph_due=0
+        tick=time.monotonic();graph_due=0;notice_due={}
+        def notice(key,details):
+            now=time.monotonic()
+            if now>=notice_due.get(key,0):
+                print(json.dumps(details,ensure_ascii=False),flush=True);notice_due[key]=now+1
+        def check_tick():
+            nonlocal tick
+            now=time.monotonic()
+            if now-tick>.05:
+                if strict_monitoring:raise RuntimeError("回放调度延迟过大；停止，不跳帧追赶")
+                notice("timing",{"event":"replay_timing_warning","delay_seconds":now-tick,"strict_monitoring":False})
+                # Delay the timeline rather than bursting overdue commands.
+                tick=now
         def emit(pair):
             nonlocal last,tick,graph_due
-            if time.monotonic()-tick>.05:raise RuntimeError("回放调度延迟过大；停止，不跳帧追赶")
+            check_tick()
             if time.monotonic()>=graph_due:
                 graph_check();graph_due=time.monotonic()+1
             sample=state.sample(replay=True);health.check()
-            if time.monotonic()-tick>.05:raise RuntimeError("回放调度延迟过大；停止")
+            check_tick()
             for s in core.SIDES:
-                if max(abs(a-b) for a,b in zip(sample["front"][s]["position"][:6],last[s][:6]))>.2:
-                    raise RuntimeError("前臂跟踪偏差过大："+s)
+                actual=sample["front"][s]["position"]
+                errors=[abs(a-b) for a,b in zip(actual[:6],last[s][:6])];joint=max(range(6),key=errors.__getitem__)
+                if errors[joint]>.2:
+                    details={"event":"replay_tracking_error" if strict_monitoring else "replay_tracking_warning",
+                             "side":s,"joint":joint+1,"measured_rad":actual[joint],"commanded_rad":last[s][joint],
+                             "error_rad":errors[joint],"strict_monitoring":strict_monitoring}
+                    if strict_monitoring:
+                        print(json.dumps(details,ensure_ascii=False),flush=True)
+                        raise RuntimeError("前臂跟踪偏差过大：%s joint%d %.4frad"%(s,joint+1,errors[joint]))
+                    notice("tracking_"+s,details)
                 for i,(a,b) in enumerate(zip(last[s],pair[s])):
                     limit=(core.GRIPPER_SPEED if i==6 else core.JOINT_SPEED)/core.RATE
                     if abs(b-a)>limit+1e-8:raise RuntimeError("回放指令步长越限；停止")
@@ -311,6 +331,9 @@ def replay_sequence(state,traces, *, confirmed=False):
             last={s:list(pair[s]) for s in core.SIDES}
             tick+=1/core.RATE;time.sleep(max(0,tick-time.monotonic()))
         def settle(target):
+            if not strict_monitoring:
+                emit(target)
+                return
             until=time.monotonic()+5
             while time.monotonic()<until:
                 emit(target);sample=state.sample(replay=True)
@@ -324,7 +347,7 @@ def replay_sequence(state,traces, *, confirmed=False):
             print("轨迹 %d/%d：开始回放。" % (index,len(plans)),flush=True)
             for i in range(math.ceil(times[-1]*core.RATE)+1):emit(core.interpolate(times,poses,i/core.RATE))
             settle(poses[-1])
-            print("轨迹 %d/%d：已到达终点。" % (index,len(plans)),flush=True)
+            print(("轨迹 %d/%d：已到达终点。" if strict_monitoring else "轨迹 %d/%d：终点目标已发送。") % (index,len(plans)),flush=True)
     print("回放完成，前双臂保持终点；未归位/失能后臂。",flush=True)
     return 0
 
@@ -336,6 +359,7 @@ def main(argv=None):
     ap.add_argument("--web-confirmed", action="store_true", help="由网页显式开始操作；保留全部硬件检查")
     ap.add_argument("--name", default="", help="轨迹显示名称，不作为文件路径")
     ap.add_argument("--next", dest="next_files", action="append", default=[], help="按顺序追加下一条回放轨迹；可重复，最多共32条")
+    ap.add_argument("--strict-monitoring",action="store_true",help="启用跟踪偏差、调度延迟和到位确认的严格退出检查；默认仅提示")
     args=ap.parse_args(argv)
     if args.next_files and args.action!="replay":ap.error("--next只用于replay")
     if len(args.next_files)>31:ap.error("回放最多32条轨迹")
@@ -362,7 +386,7 @@ def main(argv=None):
     rospy.init_node("platform_teleop_state",anonymous=True,disable_signals=True)
     with operation_lock():
         state=State(replay=args.action=="replay")
-        try:return record(state,confirmed=args.web_confirmed,name=args.name) if args.action=="record" else replay_sequence(state,traces,confirmed=args.web_confirmed)
+        try:return record(state,confirmed=args.web_confirmed,name=args.name) if args.action=="record" else replay_sequence(state,traces,confirmed=args.web_confirmed,strict_monitoring=args.strict_monitoring)
         finally:state.close()
 
 

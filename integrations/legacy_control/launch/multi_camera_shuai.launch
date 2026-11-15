@@ -4,6 +4,11 @@
     <arg name="3d_sensor" default="dabai"/>
     <arg name="device_num" default="3"/>
 
+    <!-- Native 4:3 MJPEG modes verified from all three USB descriptors. -->
+    <arg name="color_width" default="1632"/>
+    <arg name="color_height" default="1224"/>
+    <arg name="color_fps" default="30"/>
+
     <!-- 相机topic前缀 -->
     <arg name="camera1_prefix" default="r"/>
     <arg name="camera2_prefix" default="l"/>
@@ -25,6 +30,9 @@
         <arg name="camera_name" value="$(arg camera_name)_$(arg camera1_prefix)"/>
         <arg name="serial_number" value="$(arg camera1_serila_number)"/>
         <arg name="device_num" value="$(arg device_num)"/>
+        <arg name="color_width" value="$(arg color_width)"/>
+        <arg name="color_height" value="$(arg color_height)"/>
+        <arg name="color_fps" value="$(arg color_fps)"/>
     </include>
 
 
@@ -32,6 +40,9 @@
         <arg name="camera_name" value="$(arg camera_name)_$(arg camera2_prefix)"/>
         <arg name="serial_number" value="$(arg camera2_serila_number)"/>
         <arg name="device_num" value="$(arg device_num)"/>
+        <arg name="color_width" value="$(arg color_width)"/>
+        <arg name="color_height" value="$(arg color_height)"/>
+        <arg name="color_fps" value="$(arg color_fps)"/>
     </include>
 
 
@@ -39,6 +50,9 @@
         <arg name="camera_name" value="$(arg camera_name)_$(arg camera3_prefix)"/>
         <arg name="serial_number" value="$(arg camera3_serila_number)"/>
         <arg name="device_num" value="$(arg device_num)"/>
+        <arg name="color_width" value="$(arg color_width)"/>
+        <arg name="color_height" value="$(arg color_height)"/>
+        <arg name="color_fps" value="$(arg color_fps)"/>
     </include>
 
 </launch>
