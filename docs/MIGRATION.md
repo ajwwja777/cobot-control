@@ -228,3 +228,14 @@ robot/teleop.py 增加显式 --web-confirmed 和显示名 --name，供网页已�
 源码631c3e854553e31704c3672cddef2d6346b31370已push：camera_guard只读扫描命名Astra节点的USB FD，启动第二组前报告旧/其他持有者的PID/设备，自己的托管组及后代不误拦，不自动结束外部任务。设备系统探测同时核对三路图像发布者；Web c257f0f进一步按真实新鲜帧呈现相机状态。3项新增保护回归及跨项目144相关测试通过，前端149通过。正式重复相机Start复用同PID2810507，未增加进程；约2秒三路源序号增加62/61/61，640×480图像可解码。实际独立无动作短录像37/38/38帧，rawvideo三文件验证通过。
 
 6文件批次SHA安装后仅Web2780447→2820970，已恢复的相机与ROS进程身份保持；无机械臂/模型启停或机器人动作。用户已授权本次必要相机恢复和网页修复；完成后现场交还用户。细节及证据归cobot-web/docs/MIGRATION.md和outputs/motion-camera-followup-20261113，现场cobot-web/runtime/verification/motion-camera-followup-20261113。Guide事实摘要不提交/push。
+
+
+## 2026-11-15：顺序轨迹回放与显式录制放弃/删除
+
+用户要求有序组合轨迹及缓慢衔接，并追加录制放弃和轨迹删除。Control800c361/Web92c7ddb已push并7运行文件SHA同步。robot/teleop.py新增--next，最多32条，所有轨迹在任何发布前load/retime；同一State/operation_lock/Health/左右Publisher执行顺序，逐段终点settle后复用原core.start_path平滑到下一起点及夹爪，再settle后回放，原50Hz/速度/反馈/graph/示教/CAN检查保持。退出、异常、Ctrl-C中止整组，不自动继续。原单轨迹/TTY调用兼容。
+
+Web record控制行discard使本轮临时.jsonl.incomplete关闭后删除，返回10给父任务确认discarded；不保存最终文件、不改旧latest。新增src/cobot_control/trajectory_files.py，以同teleop.lock防录制/回放时删除，只删明确指定的根内普通.jsonl及改名sidecar，拒绝链接/越界。删除latest对应项时清除该指针，不自动改用另一条轨迹。
+
+91相关CPU/1既有跳过、154Web前端通过，含真实控制循环模拟序列平滑限速、衔接中断/接管、预校验、单发布器/lease、显式放弃临时文件与latest保持、删除同CLI锁及精确文件/链接拒绝。两份真实旧轨迹只读桥接计算71tick/1.42s，每步限速通过、零Publisher。用户确认录制结束后只重载Web733329→797583，12受保护进程身份保持；正式双尺寸页面入口与独立合成文件CPU协议/删除锁验证通过，没有真实运动/录制/删除生产轨迹或CAN/硬件/模型生命周期。实际连续运动待用户现场验收。
+
+完整事实见cobot-web/docs/MIGRATION.md，证据cobot-web/outputs/trajectory-sequence-20261115及现场cobot-web/runtime/verification/trajectory-sequence-20261115。部署源已校验，硬件节点不需重启；guide只追加摘要、不提交/push。
